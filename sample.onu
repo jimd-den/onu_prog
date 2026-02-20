@@ -1,0 +1,11 @@
+the module called Calibration
+    with concern: scaling
+
+the behavior called foo
+    with intent: transform
+    receiving:
+        a number called x
+    returning: a number
+    as:
+        let y is 10
+        y

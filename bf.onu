@@ -1,0 +1,139 @@
+-- Brainfuck Interpreter with Debugging
+
+the module called Emulation
+    with concern: esoteric languages
+
+the behavior called get-tape-val
+    with intent: get value at data pointer
+    receiving:
+        a text called tape
+        a number called dp
+    returning: a number
+    as:
+        char-at receiving tape dp
+
+the behavior called set-tape-val
+    with intent: set value at data pointer
+    receiving:
+        a text called tape
+        a number called dp
+        a number called val
+    returning: a text
+    as:
+        set-char receiving tape dp val
+
+the behavior called jump-forward
+    with intent: find matching closing bracket
+    receiving:
+        a text called code
+        a number called ip
+        a number called counter
+    returning: a number
+    with diminishing: counter
+    as:
+        let char is char-at receiving code ip
+        let next-ip is added-to receiving ip 1
+        
+        if is-equal receiving char 91
+            then jump-forward receiving code next-ip (added-to receiving counter 1)
+            else 
+                if is-equal receiving char 93
+                    then
+                        if is-equal receiving counter 0
+                            then ip
+                            else jump-forward receiving code next-ip (decreased-by receiving counter 1)
+                    else jump-forward receiving code next-ip counter
+
+the behavior called jump-backward
+    with intent: find matching opening bracket
+    receiving:
+        a text called code
+        a number called ip
+        a number called counter
+    returning: a number
+    with diminishing: ip
+    as:
+        let char is char-at receiving code ip
+        let prev-ip is decreased-by receiving ip 1
+        
+        if is-equal receiving char 93
+            then jump-backward receiving code prev-ip (added-to receiving counter 1)
+            else
+                if is-equal receiving char 91
+                    then
+                        if is-equal receiving counter 0
+                            then ip
+                            else jump-backward receiving code prev-ip (decreased-by receiving counter 1)
+                    else jump-backward receiving code prev-ip counter
+
+the behavior called execute
+    with intent: run the bf machine
+    receiving:
+        a text called code
+        a number called ip
+        a text called tape
+        a number called dp
+    returning: nothing
+    with diminishing: code
+    as:
+        if is-less receiving ip (len receiving code)
+            then
+                let instr is char-at receiving code ip
+                let next-ip is added-to receiving ip 1
+                
+                if is-equal receiving instr 43
+                    then
+                        let val is get-tape-val receiving tape dp
+                        let new-val is added-to receiving val 1
+                        let dummy is emit "Plus"
+                        let new-tape is set-tape-val receiving tape dp new-val
+                        execute receiving code next-ip new-tape dp
+                    else
+                if is-equal receiving instr 45
+                    then
+                        let val is get-tape-val receiving tape dp
+                        let new-val is decreased-by receiving val 1
+                        let dummy is emit "Plus"
+                        let new-tape is set-tape-val receiving tape dp new-val
+                        execute receiving code next-ip new-tape dp
+                    else
+                if is-equal receiving instr 62
+                    then execute receiving code next-ip tape (added-to receiving dp 1)
+                    else
+                if is-equal receiving instr 60
+                    then execute receiving code next-ip tape (decreased-by receiving dp 1)
+                    else
+                if is-equal receiving instr 46
+                    then
+                        let val is get-tape-val receiving tape dp
+                        let dummy is emit (as-text receiving val)
+                        execute receiving code next-ip tape dp
+                    else
+                if is-equal receiving instr 91
+                    then
+                        let val is get-tape-val receiving tape dp
+                        if is-equal receiving val 0
+                            then
+                                let target is jump-forward receiving code next-ip 0
+                                execute receiving code (added-to receiving target 1) tape dp
+                            else execute receiving code next-ip tape dp
+                    else
+                if is-equal receiving instr 93
+                    then
+                        let val is get-tape-val receiving tape dp
+                        if is-equal receiving val 0
+                            then execute receiving code next-ip tape dp
+                            else
+                                let target is jump-backward receiving code (decreased-by receiving ip 1) 0
+                                execute receiving code (added-to receiving target 1) tape dp
+                    else
+                        execute receiving code next-ip tape dp
+            else nothing
+
+the behavior called run
+    with intent: run a bf program
+    as:
+        let tape is "          " 
+        let code is "++."
+        let dummy is emit "Running BF: ++."
+        execute receiving code 0 tape 0

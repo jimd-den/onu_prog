@@ -1,0 +1,34 @@
+-- ═══════════════════════════════════════════
+-- Discourse Unit: Tower of Hanoi
+-- Concern: Dual recursion and string joining
+-- ═══════════════════════════════════════════
+
+the module called Games
+    with concern: recursive puzzles
+
+the behavior called hanoi
+    with intent: solve the tower of hanoi puzzle
+    receiving:
+        a number called disks
+        a text called source
+        a text called helper
+        a text called target
+    returning: nothing
+    with diminishing: disks
+    as:
+        if is-zero receiving disks
+            then nothing
+            else
+                let n-minus-one is decreased-by receiving disks 1
+                let _1 is hanoi receiving n-minus-one source target helper
+                let _msg is (joined-with receiving "Move disk " (joined-with receiving (as-text receiving disks) (joined-with receiving " from " (joined-with receiving source (joined-with receiving " to " target)))))
+                let _emit is emit _msg
+                let _2 is hanoi receiving n-minus-one helper source target
+                nothing
+
+the behavior called run
+    with intent: execute hanoi demo
+    as:
+        emit "Solving Tower of Hanoi for 3 disks:"
+        let _res is hanoi receiving 3 "A" "B" "C"
+        nothing

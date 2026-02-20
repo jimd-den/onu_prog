@@ -1,0 +1,28 @@
+the module called Math
+    with concern: numeric sequences
+
+the behavior called fibonacci
+    with intent: calculate the nth fibonacci number
+    receiving:
+        a number called n
+    returning: a number
+    with diminishing: n
+    as:
+        if is-zero receiving n
+            then 0
+            else if is-zero receiving (decreased-by receiving n 1)
+                then 1
+                else
+                    let n-minus-one is decreased-by receiving n 1
+                    let n-minus-two is decreased-by receiving n 2
+                    let first       is fibonacci receiving n-minus-one
+                    let second      is fibonacci receiving n-minus-two
+                    let dummy is emit (joined-with receiving "First: " (as-text receiving first))
+                    let dummy2 is emit (joined-with receiving "Second: " (as-text receiving second))
+                    added-to receiving first second
+        
+the behavior called run
+    as:
+        let res is fibonacci receiving 7
+        emit "The 7th Fibonacci number is (expecting 13):"
+        emit res

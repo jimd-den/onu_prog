@@ -46,6 +46,7 @@ pub enum Token {
     WithIntent,
     WithConcern,
     WithDiminishing,
+    NoGuaranteedTermination, // Composite keyword
     Receiving,
     Returning,
     As,
@@ -279,6 +280,21 @@ impl<'a> Lexer<'a> {
                     Some(Token::WithConcern)
                 } else if second == "diminishing" {
                     Some(Token::WithDiminishing)
+                } else if second == "no" {
+                    self.skip_whitespace();
+                    let third = self.lex_single_identifier_or_keyword();
+                    if third == "guaranteed" {
+                        self.skip_whitespace();
+                        let fourth = self.lex_single_identifier_or_keyword();
+                        if fourth == "termination" {
+                            return Some(Token::NoGuaranteedTermination);
+                        }
+                    }
+                    // Backtrack if not full phrase
+                    self.line = saved_line;
+                    self.column = saved_column;
+                    self.input = saved_input;
+                    Some(Token::With)
                 } else {
                     self.line = saved_line;
                     self.column = saved_column;

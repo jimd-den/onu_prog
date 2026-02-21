@@ -311,27 +311,31 @@ impl<'a> Visitor<()> for TerminationChecker<'a> {
     fn visit_behavior_call(&mut self, name: &str, args: &[Expression]) -> Result<(), OnuError> {
         if let Some(header) = self.current_behavior {
             if name == header.name {
-                // Recursive call detected. Verify termination proof.
-                let diminishing_input = header.diminishing.as_ref().ok_or_else(|| OnuError::ParseError {
-                    message: format!("Termination Error: Recursive call to '{}' requires a 'with diminishing' clause in the behavior header.", name),
-                    span: Default::default(),
-                })?;
+                if header.skip_termination_check {
+                    // Bypass strict termination check
+                } else {
+                    // Recursive call detected. Verify termination proof.
+                    let diminishing_input = header.diminishing.as_ref().ok_or_else(|| OnuError::ParseError {
+                        message: format!("Termination Error: Recursive call to '{}' requires a 'with diminishing' clause in the behavior header.", name),
+                        span: Default::default(),
+                    })?;
 
-                // Check if the first argument (subject) is proved to be smaller than the diminishing input.
-                let mut valid = false;
-                if let Some(Expression::Identifier(arg_name)) = args.get(0) {
-                    if let Some(parent) = self.smaller_vars.get(arg_name) {
-                        if parent == diminishing_input {
-                            valid = true;
+                    // Check if the first argument (subject) is proved to be smaller than the diminishing input.
+                    let mut valid = false;
+                    if let Some(Expression::Identifier(arg_name)) = args.get(0) {
+                        if let Some(parent) = self.smaller_vars.get(arg_name) {
+                            if parent == diminishing_input {
+                                valid = true;
+                            }
                         }
                     }
-                }
 
-                if !valid {
-                    return Err(OnuError::ParseError {
-                        message: format!("Termination Error: Recursive call to '{}' must pass an argument that is strictly smaller than '{}'.", name, diminishing_input),
-                        span: Default::default(),
-                    });
+                    if !valid {
+                        return Err(OnuError::ParseError {
+                            message: format!("Termination Error: Recursive call to '{}' must pass an argument that is strictly smaller than '{}'.", name, diminishing_input),
+                            span: Default::default(),
+                        });
+                    }
                 }
             }
         }

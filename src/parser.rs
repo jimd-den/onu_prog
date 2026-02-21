@@ -177,6 +177,7 @@ pub struct BehaviorHeader {
     pub receiving: Vec<Argument>,
     pub returning: ReturnType,
     pub diminishing: Option<String>, // name of the proof/variable that is smaller
+    pub skip_termination_check: bool,
 }
 
 /// The Parser maintains a position in the token stream and builds the AST.
@@ -642,7 +643,7 @@ impl<'a, 'b> Parser<'a, 'b> {
     fn is_terminator(&self, token: &Token) -> bool {
         matches!(token, Token::RParen | Token::RBracket | Token::Returning | Token::As | Token::Then | Token::Else | 
                        Token::TheModuleCalled | Token::TheShape | Token::TheBehaviorCalled | Token::TheEffectBehaviorCalled |
-                       Token::Colon | Token::WithIntent | Token::Receiving | Token::WithDiminishing | 
+                       Token::Colon | Token::WithIntent | Token::Receiving | Token::WithDiminishing | Token::NoGuaranteedTermination |
                        Token::Promises | Token::WithConcern)
     }
 
@@ -662,7 +663,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             self.consume(Token::WithIntent)?;
             self.consume(Token::Colon)?;
             while let Some(token) = self.peek_token() {
-                if matches!(token, Token::Receiving | Token::Returning | Token::WithDiminishing | Token::As) {
+                if matches!(token, Token::Receiving | Token::Returning | Token::WithDiminishing | Token::NoGuaranteedTermination | Token::As) {
                     break;
                 }
                 if !intent.is_empty() {
@@ -681,7 +682,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             self.consume(Token::Nothing)?;
         } else {
             while let Some(token) = self.peek_token() {
-                if matches!(token, Token::Returning | Token::As | Token::WithDiminishing) {
+                if matches!(token, Token::Returning | Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination) {
                     break;
                 }
                 
@@ -765,10 +766,15 @@ impl<'a, 'b> Parser<'a, 'b> {
         };
 
         let mut diminishing = None;
+        let mut skip_termination_check = false;
+
         if let Some(Token::WithDiminishing) = self.peek_token() {
             self.consume(Token::WithDiminishing)?;
             self.consume(Token::Colon)?;
             diminishing = Some(self.consume_identifier(true)?);
+        } else if let Some(Token::NoGuaranteedTermination) = self.peek_token() {
+            self.consume(Token::NoGuaranteedTermination)?;
+            skip_termination_check = true;
         }
 
         Ok(BehaviorHeader {
@@ -778,6 +784,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             receiving,
             returning,
             diminishing,
+            skip_termination_check,
         })
     }
 

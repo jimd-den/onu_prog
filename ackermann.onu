@@ -12,7 +12,7 @@ the behavior called ackermann
         an integer called m
         an integer called n
     returning: an integer
-    with diminishing: m
+    with no guaranteed termination
     as:
         if m is-zero
             then n added-to 1

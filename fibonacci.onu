@@ -1,28 +1,30 @@
-the module called Math
-    with concern: numeric sequences
+the module called PopulationDynamics
+    with concern: modeling sequential growth
 
-the behavior called fibonacci
-    with intent: calculate the nth fibonacci number
+the behavior called calculate-population
+    with intent: determine population size for a generation
     receiving:
-        a number called n
-    returning: a number
-    with diminishing: n
+        an integer called the-generation
+    returning: an integer
+    with diminishing: the-generation
     as:
-        if is-zero receiving n
+        if the-generation is-zero
             then 0
-            else if is-zero receiving (decreased-by receiving n 1)
+            else if (the-generation decreased-by 1) is-zero
                 then 1
                 else
-                    let n-minus-one is decreased-by receiving n 1
-                    let n-minus-two is decreased-by receiving n 2
-                    let first       is fibonacci receiving n-minus-one
-                    let second      is fibonacci receiving n-minus-two
-                    let dummy is emit (joined-with receiving "First: " (as-text receiving first))
-                    let dummy2 is emit (joined-with receiving "Second: " (as-text receiving second))
-                    added-to receiving first second
-        
-the behavior called run
+                    let the-previous-generation  is an integer the-generation decreased-by 1
+                    let the-ancestral-generation is an integer the-generation decreased-by 2
+                    
+                    let parent-population        is an integer the-previous-generation calculate-population
+                    let grandparent-population   is an integer the-ancestral-generation calculate-population
+                    
+                    parent-population added-to grandparent-population
+
+the effect behavior called main
+    with intent: run simulation
+    receiving:
+    returning: nothing
     as:
-        let res is fibonacci receiving 7
-        emit "The 7th Fibonacci number is (expecting 13):"
-        emit res
+        let final-population is an integer 10 calculate-population
+        emit final-population

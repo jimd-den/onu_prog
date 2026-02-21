@@ -28,18 +28,30 @@ pub enum OnuError {
 
 impl fmt::Display for OnuError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "\n═══════════════════════════════════════════\n")?;
+        write!(f, "           PEER REVIEW MEMO\n")?;
+        write!(f, "═══════════════════════════════════════════\n\n")?;
+        
         match self {
             OnuError::LexicalError { message, span } => {
-                write!(f, "Lexical Error at [{}]: {}", span, message)
+                write!(f, "Observation: The lexicon contains an undefined term at {}.\n", span)?;
+                write!(f, "Assessment:  {}\n", message)?;
+                write!(f, "Conclusion:  The discourse cannot be tokenized.\n")
             }
             OnuError::ParseError { message, span } => {
-                write!(f, "Parse Error at [{}]: {}", span, message)
+                write!(f, "Observation: The syntax at {} is inconsistent with the grammar.\n", span)?;
+                write!(f, "Assessment:  {}\n", message)?;
+                write!(f, "Conclusion:  The proposition is structurally invalid.\n")
             }
             OnuError::RuntimeError { message, span } => {
-                write!(f, "Runtime Error at [{}]: {}", span, message)
+                write!(f, "Observation: An execution anomaly occurred at {}.\n", span)?;
+                write!(f, "Assessment:  {}\n", message)?;
+                write!(f, "Conclusion:  The derivation failed during evaluation.\n")
             }
             OnuError::BehaviorConflict { name, other_name } => {
-                write!(f, "Conflict: Behavior '{}' is semantically identical to '{}'", name, other_name)
+                write!(f, "Observation: Duplicate semantic implementation detected.\n")?;
+                write!(f, "Assessment:  The behavior '{}' is semantically identical to '{}'.\n", name, other_name)?;
+                write!(f, "Conclusion:  This violates the Principle of Non-Repetition (DRY).\n")
             }
         }
     }

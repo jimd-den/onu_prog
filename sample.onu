@@ -4,8 +4,8 @@ the module called Calibration
 the behavior called foo
     with intent: transform
     receiving:
-        a number called x
-    returning: a number
+        an integer called x
+    returning: an integer
     as:
-        let y is 10
+        let y is an integer 10
         y

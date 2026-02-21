@@ -23,16 +23,22 @@ pub enum Token {
     Let,
     Is,
     The,
-    Number,
-    Text,
+    Integer,
+    Float,
+    RealNumber,
+    Strings,
+    Matrix,
     Identifier(String),
     NumericLiteral(f64),
+    IntegerLiteral(i128),
     TextLiteral(String),
+    BooleanLiteral(bool),
 
     // --- Discourse Structures ---
     TheModuleCalled,
     TheShape,
     TheBehaviorCalled,
+    TheEffectBehaviorCalled,
     Called,
     
     // --- Clauses and Modifiers ---
@@ -48,6 +54,10 @@ pub enum Token {
     Exposes,
     Promises,
     Colon,
+    A,
+    An,
+    Via,
+    Role,
     
     // --- Evaluation Control ---
     Emit,
@@ -57,6 +67,8 @@ pub enum Token {
     Else,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
 }
 
 /// TokenWithSpan wraps a token with its location in the source code.
@@ -73,7 +85,9 @@ impl PartialEq for Token {
         match (self, other) {
             (Token::Identifier(s1), Token::Identifier(s2)) => s1 == s2,
             (Token::NumericLiteral(n1), Token::NumericLiteral(n2)) => n1.to_bits() == n2.to_bits(),
+            (Token::IntegerLiteral(n1), Token::IntegerLiteral(n2)) => n1 == n2,
             (Token::TextLiteral(s1), Token::TextLiteral(s2)) => s1 == s2,
+            (Token::BooleanLiteral(b1), Token::BooleanLiteral(b2)) => b1 == b2,
             _ => std::mem::discriminant(self) == std::mem::discriminant(other),
         }
     }
@@ -87,7 +101,9 @@ impl Hash for Token {
         match self {
             Token::Identifier(s) => s.hash(state),
             Token::NumericLiteral(n) => n.to_bits().hash(state),
+            Token::IntegerLiteral(n) => n.hash(state),
             Token::TextLiteral(s) => s.hash(state),
+            Token::BooleanLiteral(b) => b.hash(state),
             _ => {}
         }
     }
@@ -161,6 +177,14 @@ impl<'a> Lexer<'a> {
                 self.next_char();
                 Token::RParen
             }
+            '[' => {
+                self.next_char();
+                Token::LBracket
+            }
+            ']' => {
+                self.next_char();
+                Token::RBracket
+            }
             '"' => self.lex_string()?,
             c if c.is_alphabetic() => self.lex_identifier_or_keyword_multi()?,
             c if c.is_ascii_digit() => self.lex_number()?,
@@ -200,6 +224,10 @@ impl<'a> Lexer<'a> {
 
         match first.as_str() {
             "the" => {
+                let saved_line = self.line;
+                let saved_column = self.column;
+                let saved_input = self.input.clone();
+
                 self.skip_whitespace();
                 let second = self.lex_single_identifier_or_keyword();
                 match second.as_str() {
@@ -207,27 +235,42 @@ impl<'a> Lexer<'a> {
                         self.skip_whitespace();
                         let third = self.lex_single_identifier_or_keyword();
                         if third == "called" {
-                            Some(Token::TheModuleCalled)
-                        } else {
-                            Some(Token::TheModuleCalled)
+                            return Some(Token::TheModuleCalled);
                         }
                     }
-                    "shape" => Some(Token::TheShape),
+                    "shape" => return Some(Token::TheShape),
                     "behavior" => {
                         self.skip_whitespace();
                         let third = self.lex_single_identifier_or_keyword();
                         if third == "called" {
-                            Some(Token::TheBehaviorCalled)
-                        } else {
-                            Some(Token::TheBehaviorCalled)
+                            return Some(Token::TheBehaviorCalled);
                         }
                     }
-                    "number" => Some(Token::Number),
-                    "text" => Some(Token::Text),
-                    _ => Some(Token::The),
+                    "effect" => {
+                        self.skip_whitespace();
+                        let third = self.lex_single_identifier_or_keyword();
+                        if third == "behavior" {
+                            self.skip_whitespace();
+                            let fourth = self.lex_single_identifier_or_keyword();
+                            if fourth == "called" {
+                                return Some(Token::TheEffectBehaviorCalled);
+                            }
+                        }
+                    }
+                    _ => {}
                 }
+                
+                // If no multi-word keyword matched, backtrack and just emit 'The'
+                self.line = saved_line;
+                self.column = saved_column;
+                self.input = saved_input;
+                Some(Token::The)
             }
             "with" => {
+                let saved_line = self.line;
+                let saved_column = self.column;
+                let saved_input = self.input.clone();
+
                 self.skip_whitespace();
                 let second = self.lex_single_identifier_or_keyword();
                 if second == "intent" {
@@ -237,15 +280,25 @@ impl<'a> Lexer<'a> {
                 } else if second == "diminishing" {
                     Some(Token::WithDiminishing)
                 } else {
+                    self.line = saved_line;
+                    self.column = saved_column;
+                    self.input = saved_input;
                     Some(Token::With)
                 }
             }
             "keeps" => {
+                let saved_line = self.line;
+                let saved_column = self.column;
+                let saved_input = self.input.clone();
+
                 self.skip_whitespace();
                 let second = self.lex_single_identifier_or_keyword();
                 if second == "internal" {
                     Some(Token::KeepsInternal)
                 } else {
+                    self.line = saved_line;
+                    self.column = saved_column;
+                    self.input = saved_input;
                     Some(Token::Keeps)
                 }
             }
@@ -261,8 +314,59 @@ impl<'a> Lexer<'a> {
             "if" => Some(Token::If),
             "then" => Some(Token::Then),
             "else" => Some(Token::Else),
-            "number" => Some(Token::Number),
-            "text" => Some(Token::Text),
+            "a" => {
+                let saved_line = self.line;
+                let saved_column = self.column;
+                let saved_input = self.input.clone();
+
+                self.skip_whitespace();
+                let second = self.lex_single_identifier_or_keyword();
+                if second == "behavior" {
+                    self.skip_whitespace();
+                    let third = self.lex_single_identifier_or_keyword();
+                    if third == "called" {
+                        return Some(Token::TheBehaviorCalled); // Reuse same token for now
+                    }
+                }
+
+                self.line = saved_line;
+                self.column = saved_column;
+                self.input = saved_input;
+                Some(Token::A)
+            }
+            "an" => {
+                let saved_line = self.line;
+                let saved_column = self.column;
+                let saved_input = self.input.clone();
+
+                self.skip_whitespace();
+                let second = self.lex_single_identifier_or_keyword();
+                if second == "effect" {
+                    self.skip_whitespace();
+                    let third = self.lex_single_identifier_or_keyword();
+                    if third == "behavior" {
+                        self.skip_whitespace();
+                        let fourth = self.lex_single_identifier_or_keyword();
+                        if fourth == "called" {
+                            return Some(Token::TheEffectBehaviorCalled);
+                        }
+                    }
+                }
+
+                self.line = saved_line;
+                self.column = saved_column;
+                self.input = saved_input;
+                Some(Token::An)
+            }
+            "via" => Some(Token::Via),
+            "role" => Some(Token::Role),
+            "integer" => Some(Token::Integer),
+            "float" => Some(Token::Float),
+            "realnumber" => Some(Token::RealNumber),
+            "strings" => Some(Token::Strings),
+            "matrix" => Some(Token::Matrix),
+            "true" => Some(Token::BooleanLiteral(true)),
+            "false" => Some(Token::BooleanLiteral(false)),
             _ => Some(Token::Identifier(first)),
         }
     }
@@ -297,7 +401,11 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        number_str.parse::<f64>().ok().map(Token::NumericLiteral)
+        if has_decimal {
+            number_str.parse::<f64>().ok().map(Token::NumericLiteral)
+        } else {
+            number_str.parse::<i128>().ok().map(Token::IntegerLiteral)
+        }
     }
 
     fn lex_string(&mut self) -> Option<Token> {
@@ -325,7 +433,8 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap().token, Token::Let);
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("pi".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::Is);
-        assert_eq!(lexer.next_token().unwrap().token, Token::Number);
+        assert_eq!(lexer.next_token().unwrap().token, Token::The);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("number".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::NumericLiteral(3.14159));
         assert!(lexer.next_token().is_none());
     }
@@ -337,8 +446,21 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap().token, Token::Let);
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("label".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::Is);
-        assert_eq!(lexer.next_token().unwrap().token, Token::Text);
+        assert_eq!(lexer.next_token().unwrap().token, Token::The);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("text".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::TextLiteral("acceptable".to_string()));
+        assert!(lexer.next_token().is_none());
+    }
+
+    #[test]
+    fn test_lex_specific_types() {
+        let input = "integer float realnumber strings matrix";
+        let mut lexer = Lexer::new(input);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Integer);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Float);
+        assert_eq!(lexer.next_token().unwrap().token, Token::RealNumber);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Strings);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Matrix);
         assert!(lexer.next_token().is_none());
     }
 
@@ -359,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_lex_behavior_declaration() {
-        let input = "the behavior called scale-value with intent: transform receiving: a number returning: a number as: result";
+        let input = "the behavior called scale-value with intent: transform receiving: a number returning: an integer as: result";
         let mut lexer = Lexer::new(input);
         assert_eq!(lexer.next_token().unwrap().token, Token::TheBehaviorCalled);
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("scale-value".to_string()));
@@ -368,15 +490,41 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("transform".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::Receiving);
         assert_eq!(lexer.next_token().unwrap().token, Token::Colon);
-        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("a".to_string()));
-        assert_eq!(lexer.next_token().unwrap().token, Token::Number);
+        assert_eq!(lexer.next_token().unwrap().token, Token::A);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("number".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::Returning);
         assert_eq!(lexer.next_token().unwrap().token, Token::Colon);
-        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("a".to_string()));
-        assert_eq!(lexer.next_token().unwrap().token, Token::Number);
+        assert_eq!(lexer.next_token().unwrap().token, Token::An);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Integer);
         assert_eq!(lexer.next_token().unwrap().token, Token::As);
         assert_eq!(lexer.next_token().unwrap().token, Token::Colon);
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("result".to_string()));
+        assert!(lexer.next_token().is_none());
+    }
+
+    #[test]
+    fn test_lex_type_specs() {
+        let input = "receiving: a number returning nothing via the role Measurable";
+        let mut lexer = Lexer::new(input);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Receiving);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Colon);
+        assert_eq!(lexer.next_token().unwrap().token, Token::A);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("number".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::Returning);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Nothing);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Via);
+        assert_eq!(lexer.next_token().unwrap().token, Token::The);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Role);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("Measurable".to_string()));
+        assert!(lexer.next_token().is_none());
+    }
+
+    #[test]
+    fn test_lex_an_article() {
+        let input = "an integer";
+        let mut lexer = Lexer::new(input);
+        assert_eq!(lexer.next_token().unwrap().token, Token::An);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Integer);
         assert!(lexer.next_token().is_none());
     }
 
@@ -387,11 +535,11 @@ mod tests {
         assert_eq!(lexer.next_token().unwrap().token, Token::Let);
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("x".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::Is);
-        assert_eq!(lexer.next_token().unwrap().token, Token::NumericLiteral(10.0));
+        assert_eq!(lexer.next_token().unwrap().token, Token::IntegerLiteral(10));
         assert_eq!(lexer.next_token().unwrap().token, Token::Let);
         assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("y".to_string()));
         assert_eq!(lexer.next_token().unwrap().token, Token::Is);
-        assert_eq!(lexer.next_token().unwrap().token, Token::NumericLiteral(20.0));
+        assert_eq!(lexer.next_token().unwrap().token, Token::IntegerLiteral(20));
         assert!(lexer.next_token().is_none());
     }
 

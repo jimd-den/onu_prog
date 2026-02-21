@@ -1,67 +1,92 @@
-# Ọ̀nụ: The Vibe-Coded Disaster 🤡
+# Ọ̀nụ
 
-Welcome to Ọ̀nụ, easily the stoopidest language you will ever use. It was entirely vibe-coded to make you type as much as humanly possible just to add two numbers. If you like productivity, leave now. This language exists so you can write code that looks like a formal apology letter.
+Ọ̀nụ is a programming language.
 
-## Why is it like this?
-There is no reason. The vibes were just there. It forces you to explain your "intent" and your "concerns" before you're allowed to actually do anything. It's like a compiler that's also a middle manager.
+## Usage
 
-## Syntax (The Long Way)
+To run a script, use the cargo command:
 
-Everything in Ọ̀nụ is a "discourse." You don't write functions; you declare "behaviors." You don't have variables; you have "irrevocable let-bindings."
-
-### Hello World (The "Please Sir" Edition)
+```bash
+cargo run -- <filename>.onu
 ```
-the behavior called run
-    with intent: say hello because the vibes demand it
+
+## Syntax
+
+### Basics
+
+Code is organized into behaviors within a module.
+
+```
+the module called Example
+    with concern: demonstration
+
+the effect behavior called main
+    with intent: program entry point
+    receiving:
+    returning: nothing
     as:
         emit "Hello, World!"
 ```
 
-### Math (Because Symbols are for Geniuses)
-We don't use `+` or `-`. That's too fast. We use words.
+### Variables
+
+Variables are immutable and declared with `let`.
 
 ```
-the behavior called math-demo
+let x is an integer 10
+let y is a float 3.14
+let message is a strings "Hello"
+```
+
+### Behaviors (Functions)
+
+Behaviors are defined with inputs and outputs.
+
+```
+the behavior called add-numbers
+    with intent: sum two integers
+    receiving:
+        an integer called a
+        an integer called b
+    returning: an integer
     as:
-        let a is added-to receiving 10 5
-        let b is multiplied-by receiving a 2
-        emit b
+        a added-to b
 ```
 
-### Logic and Comparisons
+### Conditionals
+
+Use `if`, `then`, and `else`.
+
 ```
-the behavior called check-stuff
+if x is-greater-than 5
+    then emit "Greater"
+    else emit "Smaller"
+```
+
+### Loops (Recursion)
+
+Loops are achieved through recursion.
+
+```
+the behavior called countdown
+    with intent: count down from n
+    receiving:
+        an integer called n
+    returning: nothing
+    with diminishing: n
     as:
-        if is-greater-than receiving 10 5
-            then emit "10 is big"
-            else emit "math is broken"
+        if n is-zero
+            then emit "Done"
+            else
+                emit (n as-text)
+                let next is an integer n decreased-by 1
+                next countdown
 ```
 
-## The "Gatekeeper" Rules
-The compiler is very sensitive and will stop you if you don't follow the vibes:
-1. **No Duplicates:** If you write two behaviors that do the same thing (even if they have different names), the compiler will get mad because you're repeating yourself.
-2. **Don't Get Deep:** If you nest your code too deep, the compiler quits. It doesn't like complexity. Keep it shallow.
-3. **Say Why:** You have to declare a `with intent` or `with concern`. If you don't tell the language *why* you are doing something, it won't let you do it.
+### Standard Operations
 
-## How to use this thing
-Since this is a vibe-coded masterpiece, you need Rust to run it.
+Operations are written as words.
 
-1. **Build the gatekeeper:**
-   ```bash
-   cargo build
-   ```
-
-2. **Run a script:**
-   ```bash
-   cargo run -- your_file.onu
-   ```
-
-## Standard Library (The Word Salad)
-Here are the "verbs" you can use:
-- **Math:** `added-to`, `subtracted-from`, `multiplied-by`, `divided-by`
-- **Logic:** `both-true`, `either-true`, `not-true`
-- **Comp:** `is-equal-to`, `is-greater-than`, `is-less-than`, `is-zero`
-- **Text:** `joined-with`, `len`, `char-at`, `as-text`
-- **I/O:** `emit`
-
-Enjoy your hand cramps. ✌️
+*   **Math:** `added-to`, `subtracted-from`, `multiplied-by`, `divided-by`
+*   **Logic:** `both-true`, `either-true`, `not-true`
+*   **Comparisons:** `is-equal-to`, `is-greater-than`, `is-less-than`, `is-zero`

@@ -9,21 +9,32 @@ the module called Math
 the behavior called ackermann
     with intent: compute the ackermann value for m and n
     receiving:
-        a number called m
-        a number called n
-    returning: a number
+        an integer called m
+        an integer called n
+    returning: an integer
     with diminishing: m
     as:
-        if is-zero receiving m
-            then added-to receiving n 1
-            else if is-zero receiving n
-                then ackermann receiving (decreased-by receiving m 1) 1
-                else ackermann receiving (decreased-by receiving m 1) (ackermann receiving m (decreased-by receiving n 1))
+        if m is-zero
+            then n added-to 1
+            else if n is-zero
+                then 
+                    let m-minus-1 is an integer m decreased-by 1
+                    m-minus-1 ackermann 1
+                else
+                    let m-minus-1 is an integer m decreased-by 1
+                    let n-minus-1 is an integer n decreased-by 1
+                    let inner is an integer m ackermann n-minus-1
+                    m-minus-1 ackermann inner
 
-the behavior called run
+the effect behavior called run
     with intent: execute ackermann demo
+    receiving:
+    returning: nothing
     as:
-        emit "Ackermann(2, 2) is (expecting 7):"
-        emit (ackermann receiving 2 2)
-        emit "Ackermann(3, 2) is (expecting 29):"
-        emit (ackermann receiving 3 2)
+        let dummy1 is nothing emit "Ackermann(2, 2) is (expecting 7):"
+        let val1 is an integer 2 ackermann 2
+        let dummy2 is nothing emit val1
+        let dummy3 is nothing emit "Ackermann(3, 2) is (expecting 29):"
+        let val2 is an integer 3 ackermann 2
+        let dummy4 is nothing emit val2
+        nothing

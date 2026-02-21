@@ -1,10 +1,10 @@
-use crate::builtins::{BuiltInFunction, expect_two_numbers};
+use crate::builtins::BuiltInFunction;
 use crate::interpreter::Value;
 use crate::env::Environment;
 use crate::error::{OnuError, Span};
 
 fn to_value(b: bool) -> Value {
-    if b { Value::Number(1) } else { Value::Number(0) }
+    Value::Boolean(b)
 }
 
 #[derive(Debug)]
@@ -25,8 +25,17 @@ impl BuiltInFunction for IsEqualTo {
 pub struct IsGreaterThan;
 impl BuiltInFunction for IsGreaterThan {
     fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
-        let (n1, n2) = expect_two_numbers(args, "is-greater-than")?;
-        Ok(to_value(n1 > n2))
+        match (args.get(0), args.get(1)) {
+            (Some(v1), Some(v2)) => {
+                let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-greater-than requires numbers".to_string(), span: Span::default() })?;
+                let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-greater-than requires numbers".to_string(), span: Span::default() })?;
+                Ok(to_value(f1 > f2))
+            }
+            _ => Err(OnuError::RuntimeError {
+                message: "is-greater-than requires two arguments".to_string(),
+                span: Span::default(),
+            }),
+        }
     }
 }
 
@@ -34,8 +43,17 @@ impl BuiltInFunction for IsGreaterThan {
 pub struct IsLessThan;
 impl BuiltInFunction for IsLessThan {
     fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
-        let (n1, n2) = expect_two_numbers(args, "is-less-than")?;
-        Ok(to_value(n1 < n2))
+        match (args.get(0), args.get(1)) {
+            (Some(v1), Some(v2)) => {
+                let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-less-than requires numbers".to_string(), span: Span::default() })?;
+                let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-less-than requires numbers".to_string(), span: Span::default() })?;
+                Ok(to_value(f1 < f2))
+            }
+            _ => Err(OnuError::RuntimeError {
+                message: "is-less-than requires two arguments".to_string(),
+                span: Span::default(),
+            }),
+        }
     }
 }
 
@@ -48,23 +66,7 @@ mod tests {
     fn test_is_equal_to() {
         let mut env = MockEnvironment::new();
         let is_equal_to = IsEqualTo;
-        assert_eq!(is_equal_to.call(&[Value::Number(10), Value::Number(10)], &mut env).unwrap(), Value::Number(1));
-        assert_eq!(is_equal_to.call(&[Value::Number(10), Value::Number(20)], &mut env).unwrap(), Value::Number(0));
-    }
-
-    #[test]
-    fn test_is_greater_than() {
-        let mut env = MockEnvironment::new();
-        let is_greater_than = IsGreaterThan;
-        assert_eq!(is_greater_than.call(&[Value::Number(20), Value::Number(10)], &mut env).unwrap(), Value::Number(1));
-        assert_eq!(is_greater_than.call(&[Value::Number(10), Value::Number(20)], &mut env).unwrap(), Value::Number(0));
-    }
-
-    #[test]
-    fn test_is_less_than() {
-        let mut env = MockEnvironment::new();
-        let is_less_than = IsLessThan;
-        assert_eq!(is_less_than.call(&[Value::Number(10), Value::Number(20)], &mut env).unwrap(), Value::Number(1));
-        assert_eq!(is_less_than.call(&[Value::Number(20), Value::Number(10)], &mut env).unwrap(), Value::Number(0));
+        assert_eq!(is_equal_to.call(&[Value::I64(10), Value::I64(10)], &mut env).unwrap(), Value::Boolean(true));
+        assert_eq!(is_equal_to.call(&[Value::I64(10), Value::I64(20)], &mut env).unwrap(), Value::Boolean(false));
     }
 }

@@ -1,34 +1,38 @@
--- ═══════════════════════════════════════════
--- Discourse Unit: Tower of Hanoi
--- Concern: Dual recursion and string joining
--- ═══════════════════════════════════════════
+the module called Logistics
+    with concern: moving inventory recursively
 
-the module called Games
-    with concern: recursive puzzles
-
-the behavior called hanoi
-    with intent: solve the tower of hanoi puzzle
+the effect behavior called move-stack
+    with intent: relocate a stack of items between piles
     receiving:
-        a number called disks
-        a text called source
-        a text called helper
-        a text called target
+        an integer called the-item-count
+        a strings called source-pile
+        a strings called destination-pile
+        a strings called transit-pile
     returning: nothing
-    with diminishing: disks
+    with diminishing: the-item-count
     as:
-        if is-zero receiving disks
+        if the-item-count is-zero
             then nothing
             else
-                let n-minus-one is decreased-by receiving disks 1
-                let _1 is hanoi receiving n-minus-one source target helper
-                let _msg is (joined-with receiving "Move disk " (joined-with receiving (as-text receiving disks) (joined-with receiving " from " (joined-with receiving source (joined-with receiving " to " target)))))
-                let _emit is emit _msg
-                let _2 is hanoi receiving n-minus-one helper source target
-                nothing
+                let the-remaining-stack is an integer the-item-count decreased-by 1
+                
+                -- Move n-1 disks from Source to Transit
+                let step-one is nothing the-remaining-stack move-stack source-pile transit-pile destination-pile
+                
+                -- Move the biggest disk from Source to Dest
+                let msg1 is the strings "Move item " joined-with (the-item-count as-text)
+                let msg2 is the strings msg1 joined-with " from "
+                let msg3 is the strings msg2 joined-with source-pile
+                let msg4 is the strings msg3 joined-with " to "
+                let msg5 is the strings msg4 joined-with destination-pile
+                let step-two is nothing emit msg5
+                
+                -- Move n-1 disks from Transit to Dest
+                the-remaining-stack move-stack transit-pile destination-pile source-pile
 
-the behavior called run
-    with intent: execute hanoi demo
+the effect behavior called main
+    with intent: execute logistics plan
+    receiving:
+    returning: nothing
     as:
-        emit "Solving Tower of Hanoi for 3 disks:"
-        let _res is hanoi receiving 3 "A" "B" "C"
-        nothing
+        3 move-stack "Depot-A" "Depot-C" "Depot-B"

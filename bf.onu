@@ -7,133 +7,135 @@ the behavior called get-tape-val
     with intent: get value at data pointer
     receiving:
         a text called tape
-        a number called dp
-    returning: a number
+        an integer called dp
+    returning: an integer
     as:
-        char-at receiving tape dp
+        tape char-at dp
 
 the behavior called set-tape-val
     with intent: set value at data pointer
     receiving:
         a text called tape
-        a number called dp
-        a number called val
+        an integer called dp
+        an integer called val
     returning: a text
     as:
-        set-char receiving tape dp val
+        tape set-char dp val
 
 the behavior called jump-forward
     with intent: find matching closing bracket
     receiving:
         a text called code
-        a number called ip
-        a number called counter
-    returning: a number
+        an integer called ip
+        an integer called counter
+    returning: an integer
     with diminishing: counter
     as:
-        let char is char-at receiving code ip
-        let next-ip is added-to receiving ip 1
+        let char is an integer code char-at ip
+        let next-ip is an integer ip added-to 1
         
-        if is-equal receiving char 91
-            then jump-forward receiving code next-ip (added-to receiving counter 1)
+        if char is-equal 91
+            then code jump-forward next-ip (counter added-to 1)
             else 
-                if is-equal receiving char 93
+                if char is-equal 93
                     then
-                        if is-equal receiving counter 0
+                        if counter is-equal 0
                             then ip
-                            else jump-forward receiving code next-ip (decreased-by receiving counter 1)
-                    else jump-forward receiving code next-ip counter
+                            else code jump-forward next-ip (counter decreased-by 1)
+                    else code jump-forward next-ip counter
 
 the behavior called jump-backward
     with intent: find matching opening bracket
     receiving:
         a text called code
-        a number called ip
-        a number called counter
-    returning: a number
+        an integer called ip
+        an integer called counter
+    returning: an integer
     with diminishing: ip
     as:
-        let char is char-at receiving code ip
-        let prev-ip is decreased-by receiving ip 1
+        let char is an integer code char-at ip
+        let prev-ip is an integer ip decreased-by 1
         
-        if is-equal receiving char 93
-            then jump-backward receiving code prev-ip (added-to receiving counter 1)
+        if char is-equal 93
+            then code jump-backward prev-ip (counter added-to 1)
             else
-                if is-equal receiving char 91
+                if char is-equal 91
                     then
-                        if is-equal receiving counter 0
+                        if counter is-equal 0
                             then ip
-                            else jump-backward receiving code prev-ip (decreased-by receiving counter 1)
-                    else jump-backward receiving code prev-ip counter
+                            else code jump-backward prev-ip (counter decreased-by 1)
+                    else code jump-backward prev-ip counter
 
-the behavior called execute
+the effect behavior called execute
     with intent: run the bf machine
     receiving:
         a text called code
-        a number called ip
+        an integer called ip
         a text called tape
-        a number called dp
+        an integer called dp
     returning: nothing
     with diminishing: code
     as:
-        if is-less receiving ip (len receiving code)
+        if ip is-less (code len)
             then
-                let instr is char-at receiving code ip
-                let next-ip is added-to receiving ip 1
+                let instr is an integer code char-at ip
+                let next-ip is an integer ip added-to 1
                 
-                if is-equal receiving instr 43
+                if instr is-equal 43
                     then
-                        let val is get-tape-val receiving tape dp
-                        let new-val is added-to receiving val 1
-                        let dummy is emit "Plus"
-                        let new-tape is set-tape-val receiving tape dp new-val
-                        execute receiving code next-ip new-tape dp
+                        let val is an integer tape get-tape-val dp
+                        let new-val is an integer val added-to 1
+                        let dummy is nothing emit "Plus"
+                        let new-tape is a text tape set-tape-val dp new-val
+                        code execute next-ip new-tape dp
                     else
-                if is-equal receiving instr 45
+                if instr is-equal 45
                     then
-                        let val is get-tape-val receiving tape dp
-                        let new-val is decreased-by receiving val 1
-                        let dummy is emit "Plus"
-                        let new-tape is set-tape-val receiving tape dp new-val
-                        execute receiving code next-ip new-tape dp
+                        let val is an integer tape get-tape-val dp
+                        let new-val is an integer val decreased-by 1
+                        let dummy is nothing emit "Minus"
+                        let new-tape is a text tape set-tape-val dp new-val
+                        code execute next-ip new-tape dp
                     else
-                if is-equal receiving instr 62
-                    then execute receiving code next-ip tape (added-to receiving dp 1)
+                if instr is-equal 62
+                    then code execute next-ip tape (dp added-to 1)
                     else
-                if is-equal receiving instr 60
-                    then execute receiving code next-ip tape (decreased-by receiving dp 1)
+                if instr is-equal 60
+                    then code execute next-ip tape (dp decreased-by 1)
                     else
-                if is-equal receiving instr 46
+                if instr is-equal 46
                     then
-                        let val is get-tape-val receiving tape dp
-                        let dummy is emit (as-text receiving val)
-                        execute receiving code next-ip tape dp
+                        let val is an integer tape get-tape-val dp
+                        let dummy is nothing emit (val as-text)
+                        code execute next-ip tape dp
                     else
-                if is-equal receiving instr 91
+                if instr is-equal 91
                     then
-                        let val is get-tape-val receiving tape dp
-                        if is-equal receiving val 0
+                        let val is an integer tape get-tape-val dp
+                        if val is-equal 0
                             then
-                                let target is jump-forward receiving code next-ip 0
-                                execute receiving code (added-to receiving target 1) tape dp
-                            else execute receiving code next-ip tape dp
+                                let target is an integer code jump-forward next-ip 0
+                                code execute (target added-to 1) tape dp
+                            else code execute next-ip tape dp
                     else
-                if is-equal receiving instr 93
+                if instr is-equal 93
                     then
-                        let val is get-tape-val receiving tape dp
-                        if is-equal receiving val 0
-                            then execute receiving code next-ip tape dp
+                        let val is an integer tape get-tape-val dp
+                        if val is-equal 0
+                            then code execute next-ip tape dp
                             else
-                                let target is jump-backward receiving code (decreased-by receiving ip 1) 0
-                                execute receiving code (added-to receiving target 1) tape dp
+                                let target is an integer code jump-backward (ip decreased-by 1) 0
+                                code execute (target added-to 1) tape dp
                     else
-                        execute receiving code next-ip tape dp
+                        code execute next-ip tape dp
             else nothing
 
-the behavior called run
+the effect behavior called run
     with intent: run a bf program
+    receiving:
+    returning: nothing
     as:
-        let tape is "          " 
-        let code is "++."
-        let dummy is emit "Running BF: ++."
-        execute receiving code 0 tape 0
+        let tape is a text "          " 
+        let code is a text "++."
+        let dummy is nothing emit "Running BF: ++."
+        code execute 0 tape 0

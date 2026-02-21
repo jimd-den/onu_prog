@@ -8,6 +8,7 @@ pub mod math;
 pub mod logic;
 pub mod strings;
 pub mod comparison;
+pub mod math_adv;
 
 /// BuiltInFunction represents the Strategy pattern for core language operations.
 pub trait BuiltInFunction: fmt::Debug + Send + Sync {
@@ -40,15 +41,35 @@ pub fn default_builtins() -> HashMap<String, Box<dyn BuiltInFunction>> {
     builtins.insert("char-at".to_string(), Box::new(strings::CharAt));
     builtins.insert("as-text".to_string(), Box::new(strings::AsText));
     builtins.insert("set-char".to_string(), Box::new(strings::SetChar));
+
+    // --- Advanced Math ---
+    builtins.insert("sine".to_string(), Box::new(math_adv::Sine));
+    builtins.insert("cosine".to_string(), Box::new(math_adv::Cosine));
+    builtins.insert("tangent".to_string(), Box::new(math_adv::Tangent));
+    builtins.insert("arcsin".to_string(), Box::new(math_adv::ArcSin));
+    builtins.insert("arccos".to_string(), Box::new(math_adv::ArcCos));
+    builtins.insert("arctan".to_string(), Box::new(math_adv::ArcTan));
+    
+    builtins.insert("square-root".to_string(), Box::new(math_adv::SquareRoot));
+    builtins.insert("raised-to".to_string(), Box::new(math_adv::Power));
+    builtins.insert("natural-log".to_string(), Box::new(math_adv::NaturalLog));
+    builtins.insert("exponent".to_string(), Box::new(math_adv::Exp));
+    
+    builtins.insert("dot-product".to_string(), Box::new(math_adv::DotProduct));
+    builtins.insert("cross-product".to_string(), Box::new(math_adv::CrossProduct));
+    builtins.insert("determinant".to_string(), Box::new(math_adv::Determinant));
     
     builtins
 }
 
 // --- Helper Functions for DRY Built-in Implementation ---
 
-pub fn expect_one_number(args: &[Value], op_name: &str) -> Result<u64, OnuError> {
+pub fn expect_one_number(args: &[Value], op_name: &str) -> Result<f64, OnuError> {
     match args.get(0) {
-        Some(Value::Number(n)) => Ok(*n),
+        Some(v) => v.as_f64().ok_or_else(|| OnuError::RuntimeError {
+            message: format!("'{}' requires one number", op_name),
+            span: crate::error::Span::default(),
+        }),
         _ => Err(OnuError::RuntimeError {
             message: format!("'{}' requires one number", op_name),
             span: crate::error::Span::default(),
@@ -56,9 +77,19 @@ pub fn expect_one_number(args: &[Value], op_name: &str) -> Result<u64, OnuError>
     }
 }
 
-pub fn expect_two_numbers(args: &[Value], op_name: &str) -> Result<(u64, u64), OnuError> {
+pub fn expect_two_numbers(args: &[Value], op_name: &str) -> Result<(f64, f64), OnuError> {
     match (args.get(0), args.get(1)) {
-        (Some(Value::Number(n1)), Some(Value::Number(n2))) => Ok((*n1, *n2)),
+        (Some(v1), Some(v2)) => {
+            let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError {
+                message: format!("'{}' requires two numbers", op_name),
+                span: crate::error::Span::default(),
+            })?;
+            let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError {
+                message: format!("'{}' requires two numbers", op_name),
+                span: crate::error::Span::default(),
+            })?;
+            Ok((f1, f2))
+        },
         _ => Err(OnuError::RuntimeError {
             message: format!("'{}' requires two numbers", op_name),
             span: crate::error::Span::default(),
@@ -66,9 +97,15 @@ pub fn expect_two_numbers(args: &[Value], op_name: &str) -> Result<(u64, u64), O
     }
 }
 
-pub fn expect_text_and_number(args: &[Value], op_name: &str) -> Result<(String, u64), OnuError> {
+pub fn expect_text_and_number(args: &[Value], op_name: &str) -> Result<(String, f64), OnuError> {
     match (args.get(0), args.get(1)) {
-        (Some(Value::Text(s)), Some(Value::Number(n))) => Ok((s.clone(), *n)),
+        (Some(Value::Text(s)), Some(v2)) => {
+            let n = v2.as_f64().ok_or_else(|| OnuError::RuntimeError {
+                message: format!("'{}' requires text and a number", op_name),
+                span: crate::error::Span::default(),
+            })?;
+            Ok((s.clone(), n))
+        },
         _ => Err(OnuError::RuntimeError {
             message: format!("'{}' requires text and a number", op_name),
             span: crate::error::Span::default(),

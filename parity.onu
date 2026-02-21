@@ -9,29 +9,34 @@ the module called Logic
 the behavior called is-even
     with intent: determine if a number is even
     receiving:
-        a number called n
-    returning: a number
+        an integer called n
+    returning: an integer
     with diminishing: n
     as:
-        if is-zero receiving n
+        if n is-zero
             then 1
-            else is-odd receiving (decreased-by receiving n 1)
+            else (n decreased-by 1) is-odd
 
 the behavior called is-odd
     with intent: determine if a number is odd
     receiving:
-        a number called n
-    returning: a number
+        an integer called n
+    returning: an integer
     with diminishing: n
     as:
-        if is-zero receiving n
+        if n is-zero
             then 0
-            else is-even receiving (decreased-by receiving n 1)
+            else (n decreased-by 1) is-even
 
-the behavior called run
+the effect behavior called run
     with intent: execute parity checks
+    receiving:
+    returning: nothing
     as:
-        emit "Is 10 even? (1 for yes, 0 for no):"
-        emit (is-even receiving 10)
-        emit "Is 7 even? (1 for yes, 0 for no):"
-        emit (is-even receiving 7)
+        let dummy1 is nothing emit "Is 10 even? (1 for yes, 0 for no):"
+        let val1 is an integer 10 is-even
+        let dummy2 is nothing emit val1
+        let dummy3 is nothing emit "Is 7 even? (1 for yes, 0 for no):"
+        let val2 is an integer 7 is-even
+        let dummy4 is nothing emit val2
+        nothing

@@ -1,92 +1,96 @@
 # Ọ̀nụ
 
-Ọ̀nụ is a programming language.
+Ọ̀nụ (meaning "voice" or "utterance") is a Turing-complete programming language whose syntax is designed as a **Formal Discourse**. It enforces strict Subject-Verb-Object (SVO) topology and the **Agency Principle**, where code is expressed as a series of active, direct, and verifiable events.
 
 ## Usage
 
-To run a script, use the cargo command:
+To execute an Ọ̀nụ discourse unit, use the standard command:
 
 ```bash
 cargo run -- <filename>.onu
 ```
 
-## Syntax
+## The Agency Principle
 
-### Basics
+In Ọ̀nụ, code is not a set of passive instructions. Every behavior **takes** what it needs and **delivers** what it must. Variables are not "set"; they are **derived** from expressions.
 
-Code is organized into behaviors within a module.
+### Discourse Structure
 
-```
-the module called Example
-    with concern: demonstration
+Code is organized into modules focusing on a single concern.
 
-the effect behavior called main
+```onu
+the module called GreetingDiscourse
+    with concern: introductory broadcast
+
+the effect behavior called run
     with intent: program entry point
-    receiving:
-    returning: nothing
+    takes: nothing
+    delivers: nothing
     as:
-        emit "Hello, World!"
+        broadcasts "Hello, World!"
 ```
 
-### Variables
+### Derivations (State)
 
-Variables are immutable and declared with `let`.
+Values are immutable and established through explicit derivation.
 
+```onu
+derivation: x derives-from an integer 10
+derivation: y derives-from a float 3.14
+derivation: message derives-from a string "Hello"
 ```
-let x is an integer 10
-let y is a float 3.14
-let message is a strings "Hello"
-```
 
-### Behaviors (Functions)
+### Behaviors (Active Logic)
 
-Behaviors are defined with inputs and outputs.
+Behaviors are defined by their intent and the transactional relationship with their provisions.
 
-```
-the behavior called add-numbers
-    with intent: sum two integers
-    receiving:
-        an integer called a
-        an integer called b
-    returning: an integer
+```onu
+the behavior called scale-value
+    with intent: transform a number by a factor
+    takes:
+        an integer called input
+        an integer called factor
+    delivers: an integer
     as:
-        a added-to b
+        input scales-by factor
 ```
 
 ### Conditionals
 
-Use `if`, `then`, and `else`.
+Decision making follows the logical flow of a proposition.
 
+```onu
+if x exceeds 5
+    then broadcasts "Threshold exceeded"
+    else broadcasts "Within limits"
 ```
-if x is-greater-than 5
-    then emit "Greater"
-    else emit "Smaller"
-```
 
-### Loops (Recursion)
+### Recursive Growth (Loops)
 
-Loops are achieved through recursion.
+Repetition is achieved through recursive behaviors with proven termination.
 
-```
-the behavior called countdown
-    with intent: count down from n
-    receiving:
+```onu
+the effect behavior called countdown
+    with intent: count down to equilibrium
+    takes:
         an integer called n
-    returning: nothing
+    delivers: nothing
     with diminishing: n
     as:
-        if n is-zero
-            then emit "Done"
+        if n matches 0
+            then broadcasts "Equilibrium reached."
             else
-                emit (n as-text)
-                let next is an integer n decreased-by 1
-                next countdown
+                derivation: dummy derives-from nothing broadcasts (n utilizes as-text)
+                derivation: next  derives-from an integer n decreased-by 1
+                next utilizes countdown
 ```
 
-### Standard Operations
+### Active Operations
 
-Operations are written as words.
+All interactions utilize semantic verbs rather than abstract symbols.
 
-*   **Math:** `added-to`, `subtracted-from`, `multiplied-by`, `divided-by`
-*   **Logic:** `both-true`, `either-true`, `not-true`
-*   **Comparisons:** `is-equal-to`, `is-greater-than`, `is-less-than`, `is-zero`
+*   **Arithmetic:** `added-to`, `decreased-by`, `scales-by`, `partitions-by`
+*   **Logic:** `unites-with`, `joins-with`, `opposes`
+*   **Comparisons:** `matches`, `exceeds`, `falls-short-of`
+*   **I/O:** `broadcasts`
+*   **Agency:** `utilizes`, `acts-as`, `derives-from`

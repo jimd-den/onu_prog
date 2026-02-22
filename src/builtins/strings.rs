@@ -46,8 +46,16 @@ impl BuiltInFunction for CharAt {
                     Ok(Value::I64(0))
                 }
             }
+            (Some(Value::Tuple(v)), Some(v2)) => {
+                let idx = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "char-at index must be numeric".to_string(), span: Span::default() })? as usize;
+                if let Some(val) = v.get(idx) {
+                    Ok(val.clone())
+                } else {
+                    Ok(Value::Void)
+                }
+            }
             _ => Err(OnuError::RuntimeError {
-                message: "char-at requires text and an index".to_string(),
+                message: "char-at requires (text or tuple) and a numeric index".to_string(),
                 span: Span::default(),
             }),
         }
@@ -88,6 +96,49 @@ impl BuiltInFunction for SetChar {
                 message: "set-char requires text, index, and value".to_string(),
                 span: Span::default(),
             }),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TailOf;
+impl BuiltInFunction for TailOf {
+    fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
+        match args.get(0) {
+            Some(Value::Text(s)) => {
+                if s.is_empty() { Ok(Value::Text("".to_string())) }
+                else { Ok(Value::Text(s[1..].to_string())) }
+            }
+            _ => Err(OnuError::RuntimeError { message: "tail-of requires text".to_string(), span: Span::default() }),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct InitOf;
+impl BuiltInFunction for InitOf {
+    fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
+        match args.get(0) {
+            Some(Value::Text(s)) => {
+                if s.is_empty() { Ok(Value::Text("".to_string())) }
+                else { Ok(Value::Text(s[..s.len()-1].to_string())) }
+            }
+            _ => Err(OnuError::RuntimeError { message: "init-of requires text".to_string(), span: Span::default() }),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CharFromCode;
+impl BuiltInFunction for CharFromCode {
+    fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
+        match args.get(0) {
+            Some(v) => {
+                let code = v.as_i128().ok_or_else(|| OnuError::RuntimeError { message: "char-from-code requires numeric code".to_string(), span: Span::default() })? as u32;
+                let c = std::char::from_u32(code).unwrap_or('?');
+                Ok(Value::Text(c.to_string()))
+            }
+            None => Err(OnuError::RuntimeError { message: "char-from-code requires one argument".to_string(), span: Span::default() }),
         }
     }
 }

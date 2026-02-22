@@ -1,9 +1,10 @@
-the module called HelloWorld
-    with concern: greeting
+the module called GlobalBroadcast
+    with concern: initial greeting
 
+-- This is the first discourse encountered by many researchers.
 the effect behavior called run
-    with intent: say-hello
-    receiving:
-    returning: nothing
+    with intent: deliver a greeting to the external environment
+    takes: nothing
+    delivers: nothing
     as:
-        emit "Hello, World!"
+        broadcasts "Hello, World!"

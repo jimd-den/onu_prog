@@ -63,11 +63,16 @@ pub enum Expression {
     Array(Vec<Expression>),
     Matrix { rows: usize, cols: usize, data: Vec<Expression> },
     Emit(Box<Expression>),
-    Let { 
+    Broadcasts(Box<Expression>), // Active-tense alias for Emit
+    Derivation { 
         name: String, 
         type_info: Option<TypeInfo>,
         value: Box<Expression>, 
         body: Box<Expression> 
+    },
+    ActsAs {
+        subject: Box<Expression>,
+        shape: String,
     },
     BehaviorCall { name: String, args: Vec<Expression> },
     If {
@@ -103,8 +108,12 @@ impl PartialEq for Expression {
                 r1 == r2 && c1 == c2 && d1 == d2
             }
             (Expression::Emit(e1), Expression::Emit(e2)) => e1 == e2,
-            (Expression::Let { name: n1, value: v1, body: b1, .. }, Expression::Let { name: n2, value: v2, body: b2, .. }) => {
+            (Expression::Broadcasts(e1), Expression::Broadcasts(e2)) => e1 == e2,
+            (Expression::Derivation { name: n1, value: v1, body: b1, .. }, Expression::Derivation { name: n2, value: v2, body: b2, .. }) => {
                 n1 == n2 && v1 == v2 && b1 == b2
+            }
+            (Expression::ActsAs { subject: s1, shape: sh1 }, Expression::ActsAs { subject: s2, shape: sh2 }) => {
+                s1 == s2 && sh1 == sh2
             }
             (Expression::BehaviorCall { name: n1, args: a1 }, Expression::BehaviorCall { name: n2, args: a2 }) => {
                 n1 == n2 && a1 == a2
@@ -148,10 +157,15 @@ impl std::hash::Hash for Expression {
                 data.hash(state);
             }
             Expression::Emit(e) => e.hash(state),
-            Expression::Let { name, value, body, .. } => {
+            Expression::Broadcasts(e) => e.hash(state),
+            Expression::Derivation { name, value, body, .. } => {
                 name.hash(state);
                 value.hash(state);
                 body.hash(state);
+            }
+            Expression::ActsAs { subject, shape } => {
+                subject.hash(state);
+                shape.hash(state);
             }
             Expression::BehaviorCall { name, args } => {
                 name.hash(state);
@@ -174,8 +188,8 @@ pub struct BehaviorHeader {
     pub name: String,
     pub is_effect: bool,
     pub intent: String,
-    pub receiving: Vec<Argument>,
-    pub returning: ReturnType,
+    pub takes: Vec<Argument>,
+    pub delivers: ReturnType,
     pub diminishing: Option<String>, // name of the proof/variable that is smaller
     pub skip_termination_check: bool,
 }
@@ -205,7 +219,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.current_depth += 1;
         if self.current_depth > self.max_depth {
             return Err(OnuError::ParseError {
-                message: format!("KISS Violation: Depth budget exceeded ({} > {})", self.current_depth, self.max_depth),
+                message: format!("KISS VIOLATION: The discourse is too deep ({} > {}). Please derive intermediate values.", self.current_depth, self.max_depth),
                 span: self.current_span(),
             });
         }
@@ -343,40 +357,41 @@ impl<'a, 'b> Parser<'a, 'b> {
             if matches!(token, Token::TheModuleCalled | Token::TheShape | Token::TheBehaviorCalled | Token::TheEffectBehaviorCalled) {
                 break;
             }
-            expressions.push(self.parse_expression()?);
+            if matches!(token, Token::Derivation | Token::Let | Token::If) {
+                expressions.push(self.parse_primary()?);
+            } else {
+                expressions.push(self.parse_expression()?);
+            }
         }
         
-        let body = if expressions.is_empty() {
-            Expression::Nothing
-        } else if expressions.len() == 1 {
+        let body = if expressions.len() == 1 {
             expressions.pop().unwrap()
         } else {
             Expression::Block(expressions)
         };
 
-        if header.returning.0 == OnuType::Nothing {
-            match body {
+        if header.delivers.0 == OnuType::Nothing {
+            let is_yielding = match body {
                 Expression::I8(_) | Expression::I16(_) | Expression::I32(_) | Expression::I64(_) | Expression::I128(_) |
                 Expression::U8(_) | Expression::U16(_) | Expression::U32(_) | Expression::U64(_) | Expression::U128(_) |
-                Expression::F32(_) | Expression::F64(_) | Expression::Text(_) => {
-                    return Err(OnuError::ParseError {
-                        message: "Behavior body yields a value but 'returning nothing' was specified.".to_string(),
-                        span: start_span,
-                    });
-                }
+                Expression::F32(_) | Expression::F64(_) | Expression::Text(_) | Expression::Boolean(_) | Expression::Identifier(_) => true,
                 Expression::Block(ref exprs) => {
                     if let Some(last) = exprs.last() {
-                        if matches!(last, Expression::I8(_) | Expression::I16(_) | Expression::I32(_) | Expression::I64(_) | Expression::I128(_) |
+                        matches!(last, Expression::I8(_) | Expression::I16(_) | Expression::I32(_) | Expression::I64(_) | Expression::I128(_) |
                                           Expression::U8(_) | Expression::U16(_) | Expression::U32(_) | Expression::U64(_) | Expression::U128(_) |
-                                          Expression::F32(_) | Expression::F64(_) | Expression::Text(_)) {
-                            return Err(OnuError::ParseError {
-                                message: "Behavior body yields a value but 'returning nothing' was specified.".to_string(),
-                                span: self.current_span(),
-                            });
-                        }
+                                          Expression::F32(_) | Expression::F64(_) | Expression::Text(_) | Expression::Boolean(_) | Expression::Identifier(_))
+                    } else {
+                        false
                     }
                 }
-                _ => {}
+                _ => false,
+            };
+
+            if is_yielding {
+                return Err(OnuError::ParseError {
+                    message: "Behavior body yields a value but 'delivers nothing' was specified.".to_string(),
+                    span: start_span,
+                });
             }
         }
         
@@ -384,26 +399,66 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     /// Parses an expression using SVO (Subject-Verb-Object) Infix topology.
-    /// It uses arity information from the Registry to consume exactly the right number of objects.
     pub fn parse_expression(&mut self) -> Result<Expression, OnuError> {
         self.enter_expression()?;
+
         let mut left = self.parse_primary()?;
         
-        while let Some(Token::Identifier(ref name)) = self.peek_token() {
-            if let Some(registry) = self.registry {
-                if let Some(arity) = registry.get_arity(name) {
-                    self.pos += 1; // Consume the Verb
-                    let mut args = Vec::new();
-                    args.push(left); // Subject is the first argument
-                    
-                    // Consume exactly arity - 1 more objects
-                    // If arity is 1, this loop won't run, resulting in (Subject Verb)
-                    for _ in 0..(arity.saturating_sub(1)) {
-                        args.push(self.parse_primary()?);
+        while let Some(token) = self.peek_token() {
+            match token {
+                Token::Utilizes | Token::Identifier(_) | 
+                Token::Matches | Token::Exceeds | Token::FallsShortOf | 
+                Token::ScalesBy | Token::PartitionsBy | 
+                Token::UnitesWith | Token::JoinsWith | Token::Opposes | 
+                Token::DecreasedBy | Token::InitOf | Token::TailOf => {
+                    let name = match token {
+                        Token::Utilizes => {
+                            self.pos += 1;
+                            self.consume_identifier(false)?
+                        }
+                        Token::Identifier(ref n) => n.clone(),
+                        Token::Matches => "matches".to_string(),
+                        Token::Exceeds => "exceeds".to_string(),
+                        Token::FallsShortOf => "falls-short-of".to_string(),
+                        Token::ScalesBy => "scales-by".to_string(),
+                        Token::PartitionsBy => "partitions-by".to_string(),
+                        Token::UnitesWith => "unites-with".to_string(),
+                        Token::JoinsWith => "joins-with".to_string(),
+                        Token::Opposes => "opposes".to_string(),
+                        Token::DecreasedBy => "decreased-by".to_string(),
+                        Token::InitOf => "init-of".to_string(),
+                        Token::TailOf => "tail-of".to_string(),
+                        _ => unreachable!(),
+                    };
+
+                    if let Some(registry) = self.registry {
+                        if registry.is_registered(&name) {
+                            if !matches!(token, Token::Utilizes) {
+                                self.pos += 1;
+                            }
+                            let arity = registry.get_arity(&name).unwrap_or(0);
+                            let mut args = Vec::new();
+                            args.push(left);
+                            
+                            for _ in 0..(arity.saturating_sub(1)) {
+                                args.push(self.parse_primary()?);
+                            }
+                            left = Expression::BehaviorCall { name, args };
+                            continue;
+                        }
                     }
-                    left = Expression::BehaviorCall { name: name.clone(), args };
+                }
+                Token::ActsAs => {
+                    self.pos += 1; // Consume ActsAs
+                    // Optional article: a, an, the
+                    if let Some(Token::A | Token::An | Token::The) = self.peek_token() {
+                        self.pos += 1;
+                    }
+                    let shape = self.consume_identifier(false)?;
+                    left = Expression::ActsAs { subject: Box::new(left), shape };
                     continue;
                 }
+                _ => {}
             }
             break;
         }
@@ -508,64 +563,38 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Ok(Expression::Array(data))
                 }
             }
-            Some(Token::Emit) => {
+            Some(Token::Emit) | Some(Token::Broadcasts) => {
+                let token = self.peek_token().unwrap();
                 if self.is_pure_context {
+                    let name = if token == Token::Emit { "emit" } else { "broadcasts" };
                     return Err(OnuError::ParseError {
-                        message: "Side-effect 'emit' is not allowed in a pure behavior. Use 'the effect behavior called...'.".to_string(),
+                        message: format!("Side-effect '{}' is not allowed in a pure behavior. Use 'the effect behavior called...'.", name),
                         span: span,
                     });
                 }
-                self.consume(Token::Emit)?;
+                self.pos += 1;
                 let value = Box::new(self.parse_expression()?);
-                Ok(Expression::Emit(value))
-            }
-            Some(Token::Let) => {
-                self.consume(Token::Let)?;
-                let name = self.consume_identifier(true)?;
-                self.consume(Token::Is)?;
-                
-                let article = match self.peek_token() {
-                    Some(Token::A) => {
-                        self.consume(Token::A)?;
-                        Token::A
-                    }
-                    Some(Token::An) => {
-                        self.consume(Token::An)?;
-                        Token::An
-                    }
-                    Some(Token::The) => {
-                        self.consume(Token::The)?;
-                        Token::The
-                    }
-                    Some(Token::Nothing) => {
-                        self.consume(Token::Nothing)?;
-                        Token::Nothing
-                    }
-                    _ => return Err(OnuError::ParseError {
-                        message: "Expected 'a', 'an', 'the', or 'nothing' before type name".to_string(),
-                        span: self.current_span(),
-                    }),
-                };
-                
-                let type_name = if article == Token::Nothing {
-                    "nothing".to_string()
+                if token == Token::Emit {
+                    Ok(Expression::Emit(value))
                 } else {
-                    self.consume_identifier(false)?
+                    Ok(Expression::Broadcasts(value))
+                }
+            }
+            Some(Token::Derivation) => {
+                self.consume(Token::Derivation)?;
+                self.consume(Token::Colon)?;
+                let name = self.consume_identifier(true)?;
+                self.consume(Token::DerivesFrom)?;
+
+                // Optional type info
+                let type_info = match self.peek_token() {
+                    Some(Token::A) | Some(Token::An) | Some(Token::The) | Some(Token::Nothing) => Some(self.parse_type_info()?),
+                    _ => None,
                 };
 
                 let value = Box::new(self.parse_expression()?); 
                 
-                let onu_type = OnuType::from_name(&type_name).unwrap_or(OnuType::Shape(type_name.clone()));
-
-                let type_info = Some(TypeInfo {
-                    onu_type,
-                    display_name: type_name,
-                    article,
-                    via_role: None, // Let bindings currently don't use 'via the role' in grammar
-                });
-                
-                // KISS Principle: extracting a named intermediate (Let) should not penalize the depth of subsequent logic.
-                // We effectively "reset" the depth for the body of the Let binding.
+                // KISS Principle: extracting a named intermediate should not penalize the depth of subsequent logic.
                 let saved_depth = self.current_depth;
                 self.current_depth = 1; // Fresh start for the body
 
@@ -585,7 +614,29 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Box::new(Expression::Block(body_exprs))
                 };
                 
-                Ok(Expression::Let { name, type_info, value, body })
+                Ok(Expression::Derivation { name, type_info, value, body })
+            }
+            Some(Token::Let) => {
+                // Map 'let' to Derivation AST
+                self.consume(Token::Let)?;
+                let name = self.consume_identifier(true)?;
+                self.consume(Token::Is)?;
+                let type_info = Some(self.parse_type_info()?);
+                let value = Box::new(self.parse_expression()?); 
+                
+                let saved_depth = self.current_depth;
+                self.current_depth = 1;
+                let mut body_exprs = Vec::new();
+                while let Some(token) = self.peek_token() {
+                    if self.is_terminator(&token) { break; }
+                    body_exprs.push(self.parse_expression()?);
+                }
+                self.current_depth = saved_depth;
+                let body = if body_exprs.is_empty() { Box::new(Expression::Nothing) } 
+                           else if body_exprs.len() == 1 { Box::new(body_exprs.pop().unwrap()) } 
+                           else { Box::new(Expression::Block(body_exprs)) };
+                
+                Ok(Expression::Derivation { name, type_info, value, body })
             }
             Some(Token::If) => {
                 self.consume(Token::If)?;
@@ -601,13 +652,21 @@ impl<'a, 'b> Parser<'a, 'b> {
                 })
             }
             Some(Token::Identifier(s)) => {
-                // SVO Enforcement: Prefix usage of registered behaviors is forbidden
+                // SVO Enforcement: Prefix usage of registered behaviors is forbidden,
+                // UNLESS they take zero arguments (act as constants/propositions).
                 if let Some(registry) = self.registry {
                     if registry.is_registered(&s) {
-                        return Err(OnuError::ParseError {
-                            message: format!("Prefix usage of registered behavior '{}' is forbidden. Use SVO (subject-verb-object) grammar.", s),
-                            span,
-                        });
+                        let arity = registry.get_arity(&s).unwrap_or(0);
+                        if arity > 0 {
+                            return Err(OnuError::ParseError {
+                                message: format!("The behavior '{}' refuses to be used as a prefix. Please utilize Subject-Verb-Object (SVO) grammar.", s),
+                                span,
+                            });
+                        } else {
+                            // Arity 0: Treat as an immediate call
+                            self.pos += 1;
+                            return Ok(Expression::BehaviorCall { name: s, args: vec![] });
+                        }
                     }
                 }
                 self.pos += 1;
@@ -641,9 +700,9 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     fn is_terminator(&self, token: &Token) -> bool {
-        matches!(token, Token::RParen | Token::RBracket | Token::Returning | Token::As | Token::Then | Token::Else | 
+        matches!(token, Token::RParen | Token::RBracket | Token::Returning | Token::Delivers | Token::As | Token::Then | Token::Else | 
                        Token::TheModuleCalled | Token::TheShape | Token::TheBehaviorCalled | Token::TheEffectBehaviorCalled |
-                       Token::Colon | Token::WithIntent | Token::Receiving | Token::WithDiminishing | Token::NoGuaranteedTermination |
+                       Token::WithIntent | Token::Receiving | Token::Takes | Token::WithDiminishing | Token::NoGuaranteedTermination |
                        Token::Promises | Token::WithConcern)
     }
 
@@ -663,7 +722,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             self.consume(Token::WithIntent)?;
             self.consume(Token::Colon)?;
             while let Some(token) = self.peek_token() {
-                if matches!(token, Token::Receiving | Token::Returning | Token::WithDiminishing | Token::NoGuaranteedTermination | Token::As) {
+                if matches!(token, Token::Receiving | Token::Takes | Token::Returning | Token::Delivers | Token::WithDiminishing | Token::NoGuaranteedTermination | Token::As) {
                     break;
                 }
                 if !intent.is_empty() {
@@ -673,35 +732,27 @@ impl<'a, 'b> Parser<'a, 'b> {
             }
         }
         
-        let mut receiving = Vec::new();
-        self.consume(Token::Receiving)?;
-        self.consume(Token::Colon)?;
+        let mut takes = Vec::new();
+        if let Some(Token::Takes) = self.peek_token() {
+            self.consume(Token::Takes)?;
+            if let Some(Token::Colon) = self.peek_token() {
+                self.consume(Token::Colon)?;
+            }
+        } else {
+            self.consume(Token::Receiving)?;
+            self.consume(Token::Colon)?;
+        }
         
-        // Handle explicit 'receiving: nothing'
+        // Handle explicit 'receiving: nothing' or 'takes: nothing'
         if let Some(Token::Nothing) = self.peek_token() {
             self.consume(Token::Nothing)?;
         } else {
             while let Some(token) = self.peek_token() {
-                if matches!(token, Token::Returning | Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination) {
+                if matches!(token, Token::Returning | Token::Delivers | Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination) {
                     break;
                 }
                 
-                let article = match self.peek_token() {
-                    Some(Token::A) => {
-                        self.consume(Token::A)?;
-                        Token::A
-                    }
-                    Some(Token::An) => {
-                        self.consume(Token::An)?;
-                        Token::An
-                    }
-                    _ => return Err(OnuError::ParseError {
-                        message: "Expected 'a' or 'an' before type name in receiving clause".to_string(),
-                        span: self.current_span(),
-                    }),
-                };
-                
-                let type_name = self.consume_identifier(false)?;
+                let mut type_info = self.parse_type_info()?;
                 
                 if let Some(Token::Called) = self.peek_token() {
                     self.consume(Token::Called)?;
@@ -713,57 +764,32 @@ impl<'a, 'b> Parser<'a, 'b> {
                 
                 let var_name = self.consume_identifier(true)?;
 
-                let via_role = if let Some(Token::Via) = self.peek_token() {
+                if let Some(Token::Via) = self.peek_token() {
                     self.consume(Token::Via)?;
                     self.consume(Token::The)?;
                     self.consume(Token::Role)?;
-                    Some(self.consume_identifier(false)?)
-                } else {
-                    None
-                };
+                    type_info.via_role = Some(self.consume_identifier(false)?);
+                }
 
-                let onu_type = OnuType::from_name(&type_name).unwrap_or(OnuType::Shape(type_name.clone()));
-
-                receiving.push(Argument {
+                takes.push(Argument {
                     name: var_name,
-                    type_info: TypeInfo {
-                        onu_type,
-                        display_name: type_name,
-                        article,
-                        via_role,
-                    },
+                    type_info,
                 });
             }
         }
 
-        self.consume(Token::Returning)?;
+        if let Some(Token::Delivers) = self.peek_token() {
+            self.consume(Token::Delivers)?;
+        } else {
+            self.consume(Token::Returning)?;
+        }
+
         if let Some(Token::Colon) = self.peek_token() {
             self.consume(Token::Colon)?;
         }
         
-        let returning = if let Some(Token::Nothing) = self.peek_token() {
-            self.consume(Token::Nothing)?;
-            ReturnType(OnuType::Nothing)
-        } else {
-            let article = match self.peek_token() {
-                Some(Token::A) => {
-                    self.consume(Token::A)?;
-                    Token::A
-                }
-                Some(Token::An) => {
-                    self.consume(Token::An)?;
-                    Token::An
-                }
-                _ => return Err(OnuError::ParseError {
-                    message: "Expected 'a', 'an' or 'nothing' after 'returning'".to_string(),
-                    span: self.current_span(),
-                }),
-            };
-            
-            let type_name = self.consume_identifier(false)?;
-            let onu_type = OnuType::from_name(&type_name).unwrap_or(OnuType::Shape(type_name));
-            ReturnType(onu_type)
-        };
+        let type_info = self.parse_type_info()?;
+        let returning = ReturnType(type_info.onu_type);
 
         let mut diminishing = None;
         let mut skip_termination_check = false;
@@ -781,8 +807,8 @@ impl<'a, 'b> Parser<'a, 'b> {
             name,
             is_effect,
             intent,
-            receiving,
-            returning,
+            takes,
+            delivers: returning,
             diminishing,
             skip_termination_check,
         })
@@ -794,6 +820,66 @@ impl<'a, 'b> Parser<'a, 'b> {
 
     fn peek_ahead(&self, offset: usize) -> Option<Token> {
         self.tokens.get(self.pos + offset).map(|t| t.token.clone())
+    }
+
+    fn parse_type_info(&mut self) -> Result<TypeInfo, OnuError> {
+        // Check for explicit 'nothing' first
+        if self.peek_token() == Some(Token::Nothing) {
+            self.consume(Token::Nothing)?;
+            return Ok(TypeInfo {
+                onu_type: OnuType::Nothing,
+                display_name: "nothing".to_string(),
+                article: Token::Nothing,
+                via_role: None,
+            });
+        }
+
+        let article = match self.peek_token() {
+            Some(Token::A) => { self.consume(Token::A)?; Token::A }
+            Some(Token::An) => { self.consume(Token::An)?; Token::An }
+            Some(Token::The) => { self.consume(Token::The)?; Token::The }
+            _ => Token::Nothing, // Optional
+        };
+
+        let type_name = self.consume_identifier(false)?;
+        
+        // Optional 'of' clause: a tuple of (string, string)
+        if let Some(Token::Of) = self.peek_token() {
+            self.consume(Token::Of)?;
+        }
+
+        let onu_type = match type_name.as_str() {
+            "tuple" => {
+                self.consume(Token::LParen)?;
+                let mut types = Vec::new();
+                loop {
+                    types.push(self.parse_type_info()?.onu_type);
+                    if let Some(Token::Colon) = self.peek_token() {
+                        self.consume(Token::Colon)?;
+                    } else if let Some(Token::Identifier(ref s)) = self.peek_token() {
+                        if s == "," { self.pos += 1; }
+                        else { break; }
+                    } else {
+                        break;
+                    }
+                }
+                self.consume(Token::RParen)?;
+                OnuType::Tuple(types)
+            }
+            "array" => {
+                self.consume(Token::Of)?;
+                let inner = self.parse_type_info()?;
+                OnuType::Array(Box::new(inner.onu_type))
+            }
+            _ => OnuType::from_name(&type_name).unwrap_or(OnuType::Shape(type_name.clone())),
+        };
+
+        Ok(TypeInfo {
+            onu_type,
+            display_name: type_name,
+            article,
+            via_role: None,
+        })
     }
 
     fn consume(&mut self, expected: Token) -> Result<(), OnuError> {
@@ -835,7 +921,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Token::Integer => "integer".to_string(),
                     Token::Float => "float".to_string(),
                     Token::RealNumber => "realnumber".to_string(),
-                    Token::Strings => "strings".to_string(),
+                    Token::Strings => "string".to_string(),
                     Token::Matrix => "matrix".to_string(),
                     Token::Nothing => "nothing".to_string(),
                     Token::The => "the".to_string(),
@@ -845,8 +931,27 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Token::Called => "called".to_string(),
                     Token::As => "as".to_string(),
                     Token::Emit => "emit".to_string(),
+                    Token::Broadcasts => "broadcasts".to_string(),
                     Token::A => "a".to_string(),
                     Token::An => "an".to_string(),
+                    Token::Of => "of".to_string(),
+                    Token::Derivation => "derivation".to_string(),
+                    Token::DerivesFrom => "derives-from".to_string(),
+                    Token::Takes => "takes".to_string(),
+                    Token::Delivers => "delivers".to_string(),
+                    Token::Utilizes => "utilizes".to_string(),
+                    Token::ActsAs => "acts-as".to_string(),
+                    Token::Matches => "matches".to_string(),
+                    Token::Exceeds => "exceeds".to_string(),
+                    Token::FallsShortOf => "falls-short-of".to_string(),
+                    Token::ScalesBy => "scales-by".to_string(),
+                    Token::PartitionsBy => "partitions-by".to_string(),
+                    Token::UnitesWith => "unites-with".to_string(),
+                    Token::JoinsWith => "joins-with".to_string(),
+                    Token::Opposes => "opposes".to_string(),
+                    Token::DecreasedBy => "decreased-by".to_string(),
+                    Token::InitOf => "init-of".to_string(),
+                    Token::TailOf => "tail-of".to_string(),
                     Token::NumericLiteral(n) => n.to_string(),
                     Token::IntegerLiteral(n) => n.to_string(),
                     Token::TextLiteral(ref s) => s.clone(),
@@ -950,17 +1055,17 @@ mod tests {
     #[test]
     fn test_parse_prefix_fail() {
         let tokens = vec![
-            t(Token::Identifier("multiplied-by".to_string())),
+            t(Token::Identifier("scales-by".to_string())),
             t(Token::IntegerLiteral(5)),
             t(Token::IntegerLiteral(2)),
         ];
         let mut registry = Registry::new();
-        registry.add_name("multiplied-by", 2);
+        registry.add_name("scales-by", 2);
         let mut parser = Parser::with_registry(&tokens, &registry);
         let result = parser.parse_expression();
         
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Prefix usage of registered behavior 'multiplied-by' is forbidden"));
+        assert!(result.unwrap_err().to_string().contains("refuses to be used as a prefix"));
     }
 
     #[test]
@@ -1011,12 +1116,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_receiving_shadowing_fail() {
+    fn test_parse_takes_shadowing_fail() {
         let tokens = vec![
             t(Token::TheBehaviorCalled), t(Token::Identifier("factorial".to_string())),
-            t(Token::Receiving), t(Token::Colon),
+            t(Token::Takes), t(Token::Colon),
             t(Token::An), t(Token::Integer), t(Token::Identifier("multiplied-by".to_string())),
-            t(Token::Returning), t(Token::Nothing),
+            t(Token::Delivers), t(Token::Nothing),
             t(Token::As), t(Token::Colon),
             t(Token::Nothing),
         ];
@@ -1057,5 +1162,102 @@ mod tests {
         let mut parser = Parser::new(&tokens);
         let result = parser.parse_discourse();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_active_tense_derivation() {
+        let tokens = vec![
+            t(Token::Derivation),
+            t(Token::Colon),
+            t(Token::Identifier("x".to_string())),
+            t(Token::DerivesFrom),
+            t(Token::IntegerLiteral(10)),
+            t(Token::Identifier("x".to_string())),
+        ];
+        let mut parser = Parser::new(&tokens);
+        let result = parser.parse_expression().unwrap();
+        
+        if let Expression::Derivation { name, value, .. } = result {
+            assert_eq!(name, "x");
+            assert_eq!(*value, Expression::I64(10));
+        } else {
+            panic!("Expected Derivation, found {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_parse_acts_as_with_article() {
+        let tokens = vec![
+            t(Token::Identifier("x".to_string())),
+            t(Token::ActsAs),
+            t(Token::A),
+            t(Token::Identifier("Measurable".to_string())),
+        ];
+        let mut parser = Parser::new(&tokens);
+        let result = parser.parse_expression().unwrap();
+        
+        if let Expression::ActsAs { subject, shape } = result {
+            assert_eq!(*subject, Expression::Identifier("x".to_string()));
+            assert_eq!(shape, "Measurable");
+        } else {
+            panic!("Expected ActsAs, found {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_parse_utilizes_call() {
+        let tokens = vec![
+            t(Token::Identifier("m".to_string())),
+            t(Token::Utilizes),
+            t(Token::Identifier("ackermann".to_string())),
+            t(Token::Identifier("n".to_string())),
+        ];
+        let mut registry = Registry::new();
+        registry.add_name("ackermann", 2);
+        let mut parser = Parser::with_registry(&tokens, &registry);
+        let result = parser.parse_expression().unwrap();
+        
+        assert_eq!(
+            result,
+            Expression::BehaviorCall {
+                name: "ackermann".to_string(),
+                args: vec![Expression::Identifier("m".to_string()), Expression::Identifier("n".to_string())],
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_active_behavior_header() {
+        let tokens = vec![
+            t(Token::TheBehaviorCalled),
+            t(Token::Identifier("compute".to_string())),
+            t(Token::WithIntent),
+            t(Token::Colon),
+            t(Token::Identifier("do".to_string())),
+            t(Token::Identifier("work".to_string())),
+            t(Token::Takes),
+            t(Token::Colon),
+            t(Token::A),
+            t(Token::Integer),
+            t(Token::Called),
+            t(Token::Identifier("input".to_string())),
+            t(Token::Delivers),
+            t(Token::An),
+            t(Token::Integer),
+            t(Token::As),
+            t(Token::Colon),
+            t(Token::Identifier("input".to_string())),
+        ];
+        let mut parser = Parser::new(&tokens);
+        let result = parser.parse_discourse().unwrap();
+        
+        if let Discourse::Behavior { header, .. } = result {
+            assert_eq!(header.name, "compute");
+            assert_eq!(header.intent, "do work");
+            assert_eq!(header.takes.len(), 1);
+            assert_eq!(header.takes[0].name, "input");
+        } else {
+            panic!("Expected Behavior, found {:?}", result);
+        }
     }
 }

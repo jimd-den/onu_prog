@@ -7,15 +7,15 @@ fn test_termination_checker_missing_proof() {
     let script = r#"
 the behavior called infinite
     with intent: loop forever
-    receiving:
+    takes:
         an integer called n
-    returning: an integer
+    delivers: an integer
     as:
-        n infinite -- Recursive call without diminishing clause in header
+        n utilizes infinite -- Recursive call without diminishing clause in header
 "#;
     let result = session.run_script(script);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Termination Error"));
+    assert!(result.unwrap_err().contains("TERMINATION VIOLATION"));
 }
 
 #[test]
@@ -24,16 +24,16 @@ fn test_termination_checker_invalid_proof() {
     let script = r#"
 the behavior called infinite
     with intent: loop forever
-    receiving:
+    takes:
         an integer called n
-    returning: an integer
+    delivers: an integer
     with diminishing: n
     as:
-        n infinite -- Calling with SAME value, not smaller
+        n utilizes infinite -- Calling with SAME value, not smaller
 "#;
     let result = session.run_script(script);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Termination Error"));
+    assert!(result.unwrap_err().contains("TERMINATION VIOLATION"));
 }
 
 #[test]
@@ -42,16 +42,16 @@ fn test_termination_checker_valid_proof() {
     let script = r#"
 the behavior called factorial
     with intent: calculate factorial
-    receiving:
+    takes:
         an integer called n
-    returning: an integer
+    delivers: an integer
     with diminishing: n
     as:
-        if n is-zero
+        if n matches 0
             then 1
             else
-                let next is an integer n decreased-by 1
-                next factorial
+                derivation: next derives-from an integer n decreased-by 1
+                next utilizes factorial
 "#;
     let result = session.run_script(script);
     assert!(result.is_ok(), "Expected Ok, got {:?}", result);

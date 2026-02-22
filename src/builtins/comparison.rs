@@ -14,7 +14,7 @@ impl BuiltInFunction for IsEqualTo {
         match (args.get(0), args.get(1)) {
             (Some(v1), Some(v2)) => Ok(to_value(v1 == v2)),
             _ => Err(OnuError::RuntimeError {
-                message: "is-equal-to requires two arguments".to_string(),
+                message: "matches requires two arguments".to_string(),
                 span: Span::default(),
             }),
         }
@@ -27,12 +27,12 @@ impl BuiltInFunction for IsGreaterThan {
     fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
         match (args.get(0), args.get(1)) {
             (Some(v1), Some(v2)) => {
-                let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-greater-than requires numbers".to_string(), span: Span::default() })?;
-                let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-greater-than requires numbers".to_string(), span: Span::default() })?;
+                let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "exceeds requires numbers".to_string(), span: Span::default() })?;
+                let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "exceeds requires numbers".to_string(), span: Span::default() })?;
                 Ok(to_value(f1 > f2))
             }
             _ => Err(OnuError::RuntimeError {
-                message: "is-greater-than requires two arguments".to_string(),
+                message: "exceeds requires two arguments".to_string(),
                 span: Span::default(),
             }),
         }
@@ -45,12 +45,12 @@ impl BuiltInFunction for IsLessThan {
     fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
         match (args.get(0), args.get(1)) {
             (Some(v1), Some(v2)) => {
-                let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-less-than requires numbers".to_string(), span: Span::default() })?;
-                let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "is-less-than requires numbers".to_string(), span: Span::default() })?;
+                let f1 = v1.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "falls-short-of requires numbers".to_string(), span: Span::default() })?;
+                let f2 = v2.as_f64().ok_or_else(|| OnuError::RuntimeError { message: "falls-short-of requires numbers".to_string(), span: Span::default() })?;
                 Ok(to_value(f1 < f2))
             }
             _ => Err(OnuError::RuntimeError {
-                message: "is-less-than requires two arguments".to_string(),
+                message: "falls-short-of requires two arguments".to_string(),
                 span: Span::default(),
             }),
         }

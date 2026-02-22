@@ -47,7 +47,7 @@ impl fmt::Display for OnuType {
             OnuType::F32 => write!(f, "f32"),
             OnuType::F64 => write!(f, "f64"),
             OnuType::Boolean => write!(f, "boolean"),
-            OnuType::Strings => write!(f, "strings"),
+            OnuType::Strings => write!(f, "string"),
             OnuType::Matrix => write!(f, "matrix"),
             OnuType::Nothing => write!(f, "nothing"),
             OnuType::Tuple(types) => {
@@ -81,7 +81,7 @@ impl OnuType {
             "f32" => Some(OnuType::F32),
             "f64" => Some(OnuType::F64),
             "boolean" => Some(OnuType::Boolean),
-            "strings" => Some(OnuType::Strings),
+            "string" => Some(OnuType::Strings),
             "matrix" => Some(OnuType::Matrix),
             "nothing" => Some(OnuType::Nothing),
             // Legacy/Alias support if needed

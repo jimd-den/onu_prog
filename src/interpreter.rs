@@ -42,7 +42,9 @@ pub trait Visitor<T> {
             Expression::Array(exprs) => self.visit_array(exprs),
             Expression::Matrix { rows, cols, data } => self.visit_matrix(*rows, *cols, data),
             Expression::Emit(inner) => self.visit_emit(inner),
-            Expression::Let { name, type_info, value, body } => self.visit_let(name, type_info, value, body),
+            Expression::Broadcasts(inner) => self.visit_broadcasts(inner),
+            Expression::Derivation { name, type_info, value, body } => self.visit_derivation(name, type_info, value, body),
+            Expression::ActsAs { subject, shape } => self.visit_acts_as(subject, shape),
             Expression::BehaviorCall { name, args } => self.visit_behavior_call(name, args),
             Expression::If { condition, then_branch, else_branch } => {
                 self.visit_if(condition, then_branch, else_branch)
@@ -71,7 +73,9 @@ pub trait Visitor<T> {
     fn visit_array(&mut self, exprs: &[Expression]) -> Result<T, OnuError>;
     fn visit_matrix(&mut self, rows: usize, cols: usize, data: &[Expression]) -> Result<T, OnuError>;
     fn visit_emit(&mut self, expr: &Expression) -> Result<T, OnuError>;
-    fn visit_let(&mut self, name: &str, type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<T, OnuError>;
+    fn visit_broadcasts(&mut self, expr: &Expression) -> Result<T, OnuError>;
+    fn visit_derivation(&mut self, name: &str, type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<T, OnuError>;
+    fn visit_acts_as(&mut self, subject: &Expression, shape: &str) -> Result<T, OnuError>;
     fn visit_behavior_call(&mut self, name: &str, args: &[Expression]) -> Result<T, OnuError>;
     fn visit_if(&mut self, condition: &Expression, then_branch: &Expression, else_branch: &Expression) -> Result<T, OnuError>;
     fn visit_block(&mut self, exprs: &[Expression]) -> Result<T, OnuError>;
@@ -81,7 +85,9 @@ pub trait Visitor<T> {
 pub struct Interpreter {
     /// Variable store for the current scope.
     variables: HashMap<String, Value>,
-    /// Registry of user-defined behaviors.
+    /// Registry of user-defined behaviors and shapes.
+    pub registry: crate::registry::Registry,
+    /// Discourse of user-defined behaviors for later evaluation.
     behaviors: HashMap<String, Discourse>,
     /// Map of built-in strategy objects.
     builtins: HashMap<String, Box<dyn BuiltInFunction>>,
@@ -101,11 +107,11 @@ impl<'a> ShapeValidator<'a> {
 
     pub fn check(&mut self, discourse: &Discourse) -> Result<(), OnuError> {
         if let Discourse::Behavior { header, .. } = discourse {
-            for arg in &header.receiving {
+            for arg in &header.takes {
                 if let Some(ref role_name) = arg.type_info.via_role {
                     if !self.registry.satisfies(&arg.type_info.display_name, role_name) {
                         return Err(OnuError::ParseError {
-                            message: format!("Shape Error: Type '{}' does not satisfy the role '{}'. Required behaviors are missing.", 
+                            message: format!("SHAPE VIOLATION: Type '{}' refuses to satisfy the role '{}' because required actions are missing.", 
                                 arg.type_info.display_name, role_name),
                             span: Default::default(),
                         });
@@ -136,7 +142,7 @@ impl ConcernValidator {
             Discourse::Module { name, concern } => {
                 if self.module_name.is_some() {
                     return Err(OnuError::ParseError {
-                        message: format!("Concern Error (SRP Violation): Module '{}' cannot be declared. Discourse already has module '{}' with concern '{}'.", 
+                        message: format!("CONCERN VIOLATION: The discourse refuses to declare module '{}' because module '{}' already focuses on '{}'.", 
                             name, self.module_name.as_ref().unwrap(), self.module_concern.as_ref().unwrap()),
                         span: Default::default(),
                     });
@@ -207,10 +213,16 @@ impl<'a> Visitor<()> for ShapeValidator<'a> {
     fn visit_emit(&mut self, expr: &Expression) -> Result<(), OnuError> {
         self.visit_expression(expr)
     }
-    fn visit_let(&mut self, _name: &str, _type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<(), OnuError> {
+    fn visit_broadcasts(&mut self, expr: &Expression) -> Result<(), OnuError> {
+        self.visit_expression(expr)
+    }
+    fn visit_derivation(&mut self, _name: &str, _type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<(), OnuError> {
         self.visit_expression(value)?;
         self.visit_expression(body)?;
         Ok(())
+    }
+    fn visit_acts_as(&mut self, subject: &Expression, _shape: &str) -> Result<(), OnuError> {
+        self.visit_expression(subject)
     }
     fn visit_behavior_call(&mut self, _name: &str, args: &[Expression]) -> Result<(), OnuError> {
         for arg in args { self.visit_expression(arg)?; }
@@ -235,16 +247,14 @@ pub struct EvaluatorVisitor<'a> {
 
 /// TerminationChecker verifies that recursive calls are strictly diminishing.
 pub struct TerminationChecker<'a> {
-    registry: &'a crate::registry::Registry,
     current_behavior: Option<&'a BehaviorHeader>,
     /// Maps derived variable names to the input variable they are smaller than.
     smaller_vars: HashMap<String, String>,
 }
 
 impl<'a> TerminationChecker<'a> {
-    pub fn new(registry: &'a crate::registry::Registry) -> Self {
+    pub fn new(_registry: &'a crate::registry::Registry) -> Self {
         Self {
-            registry,
             current_behavior: None,
             smaller_vars: HashMap::new(),
         }
@@ -293,8 +303,12 @@ impl<'a> Visitor<()> for TerminationChecker<'a> {
         self.visit_expression(expr)
     }
 
-    fn visit_let(&mut self, name: &str, _type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<(), OnuError> {
-        // Look for diminishing operations: e.g. let next is n decreased-by 1
+    fn visit_broadcasts(&mut self, expr: &Expression) -> Result<(), OnuError> {
+        self.visit_expression(expr)
+    }
+
+    fn visit_derivation(&mut self, name: &str, _type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<(), OnuError> {
+        // Look for diminishing operations: e.g. derivation: next derives-from n decreased-by 1
         if let Expression::BehaviorCall { name: op, args } = value {
             if op == "decreased-by" {
                 if let Some(Expression::Identifier(input_name)) = args.get(0) {
@@ -308,6 +322,10 @@ impl<'a> Visitor<()> for TerminationChecker<'a> {
         Ok(())
     }
 
+    fn visit_acts_as(&mut self, subject: &Expression, _shape: &str) -> Result<(), OnuError> {
+        self.visit_expression(subject)
+    }
+
     fn visit_behavior_call(&mut self, name: &str, args: &[Expression]) -> Result<(), OnuError> {
         if let Some(header) = self.current_behavior {
             if name == header.name {
@@ -316,7 +334,7 @@ impl<'a> Visitor<()> for TerminationChecker<'a> {
                 } else {
                     // Recursive call detected. Verify termination proof.
                     let diminishing_input = header.diminishing.as_ref().ok_or_else(|| OnuError::ParseError {
-                        message: format!("Termination Error: Recursive call to '{}' requires a 'with diminishing' clause in the behavior header.", name),
+                        message: format!("TERMINATION VIOLATION: Recursive call to '{}' refuses to execute without a 'with diminishing' clause.", name),
                         span: Default::default(),
                     })?;
 
@@ -332,7 +350,7 @@ impl<'a> Visitor<()> for TerminationChecker<'a> {
 
                     if !valid {
                         return Err(OnuError::ParseError {
-                            message: format!("Termination Error: Recursive call to '{}' must pass an argument that is strictly smaller than '{}'.", name, diminishing_input),
+                            message: format!("TERMINATION VIOLATION: Recursive call to '{}' refuses to execute because the input is not strictly smaller than '{}'.", name, diminishing_input),
                             span: Default::default(),
                         });
                     }
@@ -428,9 +446,13 @@ impl<'a> Visitor<Value> for EvaluatorVisitor<'a> {
         Ok(Value::Void)
     }
 
-    fn visit_let(&mut self, name: &str, _type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<Value, OnuError> {
+    fn visit_broadcasts(&mut self, expr: &Expression) -> Result<Value, OnuError> {
+        self.visit_emit(expr)
+    }
+
+    fn visit_derivation(&mut self, name: &str, _type_info: &Option<TypeInfo>, value: &Expression, body: &Expression) -> Result<Value, OnuError> {
         let val = self.visit_expression(value)?;
-        // TODO: In Phase 5, we will verify val matches _type_info
+        // TODO: In Phase 3, we will verify val matches _type_info for ActsAs
         let old_val = self.interpreter.variables.insert(name.to_string(), val);
         let res = self.visit_expression(body);
         if let Some(v) = old_val {
@@ -439,6 +461,28 @@ impl<'a> Visitor<Value> for EvaluatorVisitor<'a> {
             self.interpreter.variables.remove(name);
         }
         res
+    }
+
+    fn visit_acts_as(&mut self, subject: &Expression, shape: &str) -> Result<Value, OnuError> {
+        // Evaluate the subject to get its value
+        let val = self.visit_expression(subject)?;
+        
+        // Map Value to its OnuType for verification
+        let type_name = match val {
+            Value::I8(_) | Value::I16(_) | Value::I32(_) | Value::I64(_) | Value::I128(_) => "integer",
+            Value::U8(_) | Value::U16(_) | Value::U32(_) | Value::U64(_) | Value::U128(_) => "integer",
+            Value::F32(_) | Value::F64(_) => "float",
+            Value::Boolean(_) => "boolean",
+            Value::Text(_) => "string",
+            Value::Matrix(_) => "matrix",
+            Value::Void => "nothing",
+            _ => "unknown",
+        };
+
+        // Strict Safety Pillar: Verify shape fulfillment
+        self.interpreter.registry.verify_acts_as(type_name, shape)?;
+        
+        Ok(Value::Boolean(true))
     }
 
     fn visit_behavior_call(&mut self, name: &str, args: &[Expression]) -> Result<Value, OnuError> {
@@ -634,6 +678,7 @@ impl Interpreter {
     pub fn new(env: Box<dyn Environment>) -> Self {
         Self {
             variables: HashMap::new(),
+            registry: crate::registry::Registry::new(),
             behaviors: HashMap::new(),
             builtins: default_builtins(),
             env,
@@ -643,6 +688,13 @@ impl Interpreter {
     /// Registers a user-defined behavior.
     pub fn register_behavior(&mut self, discourse: Discourse) {
         if let Discourse::Behavior { ref header, .. } = discourse {
+            // Also register in the semantic registry
+            let sig = crate::registry::BehaviorSignature {
+                input_types: header.takes.iter().map(|a| a.type_info.onu_type.clone()).collect(),
+                return_type: header.delivers.0.clone(),
+            };
+            self.registry.add_signature(&header.name, sig);
+            self.registry.mark_implemented(&header.name);
             self.behaviors.insert(header.name.clone(), discourse);
         }
     }
@@ -677,7 +729,7 @@ impl Interpreter {
             self.variables.clear();
             
             // Agglutinative parameter binding
-            for (i, arg) in header.receiving.iter().enumerate() {
+            for (i, arg) in header.takes.iter().enumerate() {
                 if let Some(val) = args.get(i) {
                     self.variables.insert(arg.name.clone(), val.clone());
                 }
@@ -688,7 +740,7 @@ impl Interpreter {
             last_val
         } else {
             Err(OnuError::RuntimeError {
-                message: format!("Unknown behavior: {}", name),
+                message: format!("The discourse does not recognize behavior '{}'.", name),
                 span: Span::default(),
             })
         }
@@ -702,10 +754,10 @@ mod tests {
     use crate::env::MockEnvironment;
 
     #[test]
-    fn test_interpreter_let_and_identifier() {
+    fn test_interpreter_derivation_and_identifier() {
         let env = Box::new(MockEnvironment::new());
         let mut interpreter = Interpreter::new(env);
-        let expr = Expression::Let {
+        let expr = Expression::Derivation {
             name: "x".to_string(),
             type_info: None,
             value: Box::new(Expression::I64(42)),
@@ -716,11 +768,43 @@ mod tests {
     }
 
     #[test]
-    fn test_interpreter_emit() {
+    fn test_interpreter_broadcasts() {
         let env = Box::new(MockEnvironment::new());
         let mut interpreter = Interpreter::new(env);
-        let expr = Expression::Emit(Box::new(Expression::Text("test".to_string())));
+        let expr = Expression::Broadcasts(Box::new(Expression::Text("test".to_string())));
         interpreter.evaluate_expression(&expr).unwrap();
+    }
+
+    #[test]
+    fn test_interpreter_acts_as() {
+        let env = Box::new(MockEnvironment::new());
+        let mut interpreter = Interpreter::new(env);
+        
+        // Register a shape
+        interpreter.registry.add_shape("Measurable", vec![("measure".to_string(), crate::registry::BehaviorSignature {
+            input_types: vec![],
+            return_type: crate::types::OnuType::I64,
+        })]);
+        
+        // Subject that fails (lacks 'measure')
+        let expr_fail = Expression::ActsAs {
+            subject: Box::new(Expression::I64(10)),
+            shape: "Measurable".to_string(),
+        };
+        let result = interpreter.evaluate_expression(&expr_fail);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("refuses to act-as [Measurable] because it lacks the [measure] action"));
+
+        // Register the missing action
+        interpreter.registry.add_name("measure", 0);
+        interpreter.registry.mark_implemented("measure");
+        
+        let expr_pass = Expression::ActsAs {
+            subject: Box::new(Expression::I64(10)),
+            shape: "Measurable".to_string(),
+        };
+        let val = interpreter.evaluate_expression(&expr_pass).unwrap();
+        assert_eq!(val, Value::Boolean(true));
     }
 
     #[test]

@@ -34,19 +34,19 @@ impl fmt::Display for OnuError {
         
         match self {
             OnuError::LexicalError { message, span } => {
-                write!(f, "Observation: The lexicon contains an undefined term at {}.\n", span)?;
+                write!(f, "Observation: An illegal character attempts to enter the discourse at {}.\n", span)?;
                 write!(f, "Assessment:  {}\n", message)?;
-                write!(f, "Conclusion:  The discourse cannot be tokenized.\n")
+                write!(f, "Conclusion:  The discourse refuses to be tokenized.\n")
             }
             OnuError::ParseError { message, span } => {
-                write!(f, "Observation: The syntax at {} is inconsistent with the grammar.\n", span)?;
+                write!(f, "Observation: The proposition at {} violates the grammatical covenant.\n", span)?;
                 write!(f, "Assessment:  {}\n", message)?;
-                write!(f, "Conclusion:  The proposition is structurally invalid.\n")
+                write!(f, "Conclusion:  The proposition refuses to comply with the grammar.\n")
             }
             OnuError::RuntimeError { message, span } => {
-                write!(f, "Observation: An execution anomaly occurred at {}.\n", span)?;
+                write!(f, "Observation: An evaluation event failed at {}.\n", span)?;
                 write!(f, "Assessment:  {}\n", message)?;
-                write!(f, "Conclusion:  The derivation failed during evaluation.\n")
+                write!(f, "Conclusion:  The derivation refuses to evaluate.\n")
             }
             OnuError::BehaviorConflict { name, other_name } => {
                 write!(f, "Observation: Duplicate semantic implementation detected.\n")?;

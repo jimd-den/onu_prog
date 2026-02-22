@@ -22,25 +22,25 @@ pub fn default_builtins() -> HashMap<String, Box<dyn BuiltInFunction>> {
     builtins.insert("added-to".to_string(), Box::new(math::Add));
     builtins.insert("decreased-by".to_string(), Box::new(math::Sub));
     builtins.insert("subtracted-from".to_string(), Box::new(math::SubtractedFrom));
-    builtins.insert("multiplied-by".to_string(), Box::new(math::Mul));
-    builtins.insert("divided-by".to_string(), Box::new(math::Div));
+    builtins.insert("scales-by".to_string(), Box::new(math::Mul));
+    builtins.insert("partitions-by".to_string(), Box::new(math::Div));
     
-    builtins.insert("is-zero".to_string(), Box::new(logic::IsZero));
-    builtins.insert("is-less".to_string(), Box::new(logic::IsLess));
-    builtins.insert("is-equal".to_string(), Box::new(logic::IsEqual));
-    builtins.insert("both-true".to_string(), Box::new(logic::BothTrue));
-    builtins.insert("either-true".to_string(), Box::new(logic::EitherTrue));
-    builtins.insert("not-true".to_string(), Box::new(logic::NotTrue));
+    builtins.insert("unites-with".to_string(), Box::new(logic::BothTrue));
+    builtins.insert("joins-with".to_string(), Box::new(logic::EitherTrue));
+    builtins.insert("opposes".to_string(), Box::new(logic::NotTrue));
 
-    builtins.insert("is-equal-to".to_string(), Box::new(comparison::IsEqualTo));
-    builtins.insert("is-greater-than".to_string(), Box::new(comparison::IsGreaterThan));
-    builtins.insert("is-less-than".to_string(), Box::new(comparison::IsLessThan));
+    builtins.insert("matches".to_string(), Box::new(comparison::IsEqualTo));
+    builtins.insert("exceeds".to_string(), Box::new(comparison::IsGreaterThan));
+    builtins.insert("falls-short-of".to_string(), Box::new(comparison::IsLessThan));
     
     builtins.insert("joined-with".to_string(), Box::new(strings::Join));
     builtins.insert("len".to_string(), Box::new(strings::Len));
     builtins.insert("char-at".to_string(), Box::new(strings::CharAt));
     builtins.insert("as-text".to_string(), Box::new(strings::AsText));
     builtins.insert("set-char".to_string(), Box::new(strings::SetChar));
+    builtins.insert("tail-of".to_string(), Box::new(strings::TailOf));
+    builtins.insert("init-of".to_string(), Box::new(strings::InitOf));
+    builtins.insert("char-from-code".to_string(), Box::new(strings::CharFromCode));
 
     // --- Advanced Math ---
     builtins.insert("sine".to_string(), Box::new(math_adv::Sine));

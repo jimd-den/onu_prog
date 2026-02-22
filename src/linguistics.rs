@@ -16,7 +16,7 @@ impl LinguisticValidator {
     pub fn validate(discourse: &Discourse) -> Result<(), OnuError> {
         match discourse {
             Discourse::Behavior { header, .. } => {
-                for arg in &header.receiving {
+                for arg in &header.takes {
                     Self::validate_article(&arg.type_info.article, &arg.type_info.display_name)?;
                 }
                 // ReturnType is always safe because 'nothing' is handled or it uses OnuType
@@ -36,11 +36,11 @@ impl LinguisticValidator {
             (Token::An, true) => Ok(()),
             (Token::A, false) => Ok(()),
             (Token::An, false) => Err(OnuError::ParseError {
-                message: format!("Linguistic Error: Use 'a' before '{}' (starts with a consonant).", type_name),
+                message: format!("LINGUISTIC VIOLATION: The discourse demands 'a' before '{}' (which initiates with a consonant).", type_name),
                 span: Default::default(), // Validator needs spans, but AST currently doesn't store them for types
             }),
             (Token::A, true) => Err(OnuError::ParseError {
-                message: format!("Linguistic Error: Use 'an' before '{}' (starts with a vowel).", type_name),
+                message: format!("LINGUISTIC VIOLATION: The discourse demands 'an' before '{}' (which initiates with a vowel).", type_name),
                 span: Default::default(),
             }),
             _ => Ok(()),

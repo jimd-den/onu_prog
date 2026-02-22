@@ -66,7 +66,7 @@ impl BuiltInFunction for SubtractedFrom {
 pub struct Mul;
 impl BuiltInFunction for Mul {
     fn call(&self, args: &[Value], _env: &mut dyn Environment) -> Result<Value, OnuError> {
-        bin_op(args, "multiplied-by", |a, b| a * b, |a, b| a * b)
+        bin_op(args, "scales-by", |a, b| a * b, |a, b| a * b)
     }
 }
 
@@ -92,7 +92,7 @@ impl BuiltInFunction for Div {
                 Ok(Value::I64((n1 / n2) as i64))
             }
             _ => Err(OnuError::RuntimeError {
-                message: "'divided-by' requires consistent numeric arguments".to_string(),
+                message: "'partitions-by' requires consistent numeric arguments".to_string(),
                 span: Default::default(),
             }),
         }

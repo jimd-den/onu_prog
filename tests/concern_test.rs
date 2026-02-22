@@ -14,7 +14,7 @@ the module called IO
     let result = session.run_script(script);
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.contains("Concern Error") || err.contains("SRP Violation"));
+    assert!(err.contains("CONCERN VIOLATION"));
 }
 
 #[test]

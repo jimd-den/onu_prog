@@ -6,10 +6,10 @@ fn test_cli_lex_and_register_success() {
     let script = r#"
 the behavior called foo
     with intent: test
-    receiving:
-    returning: a number
+    takes: nothing
+    delivers: a number
     as:
-        let x is the number 10
+        derivation: x derives-from the number 10
         x
 "#;
     let file_path = "test_script_success_int.onu";
@@ -32,18 +32,20 @@ fn test_cli_lex_and_register_duplicate() {
     let script = r#"
 the behavior called foo
     with intent: test
-    receiving:
-    returning: an integer
+    takes:
+        an integer called arg
+    delivers: an integer
     as:
-        let x is an integer 10
+        derivation: x derives-from an integer 10
         x
 
 the behavior called bar
     with intent: test
-    receiving:
-    returning: an integer
+    takes:
+        an integer called arg
+    delivers: an integer
     as:
-        let x is an integer 10
+        derivation: x derives-from an integer 10
         x
 "#;
     let file_path = "test_script_duplicate_int.onu";
@@ -69,10 +71,10 @@ the module called HelloWorld
 
 the effect behavior called run
     with intent: say-hello
-    receiving:
-    returning: nothing
+    takes: nothing
+    delivers: nothing
     as:
-        emit "Hello, World!"
+        broadcasts "Hello, World!"
 "#;
     let file_path = "hello_world_int.onu";
     fs::write(file_path, script).unwrap();
@@ -97,25 +99,25 @@ the module called Math
 
 the behavior called factorial
     with intent: calculate the product of a sequence
-    receiving:
+    takes:
         an integer called the-count
-    returning: an integer
+    delivers: an integer
     with diminishing: the-count
     as:
-        if the-count is-zero
+        if the-count matches 0
             then 1
             else
-                let the-previous-count is an integer the-count decreased-by 1
-                let the-accumulated-value is an integer the-previous-count factorial
-                the-count multiplied-by the-accumulated-value
+                derivation: the-previous-count derives-from an integer the-count decreased-by 1
+                derivation: the-accumulated-value derives-from an integer the-previous-count utilizes factorial
+                the-count scales-by the-accumulated-value
         
 the effect behavior called main
     with intent: demonstrate factorial
-    receiving:
-    returning: nothing
+    takes: nothing
+    delivers: nothing
     as:
-        let result is an integer 5 factorial
-        emit result
+        derivation: result derives-from an integer 5 utilizes factorial
+        broadcasts result
 "#;
     let file_path = "factorial_int.onu";
     fs::write(file_path, script).unwrap();
@@ -126,7 +128,7 @@ the effect behavior called main
         .expect("Failed to execute cargo run");
 
     assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
     fs::remove_file(file_path).unwrap();
 }
 
@@ -138,31 +140,31 @@ the module called PopulationDynamics
 
 the behavior called calculate-population
     with intent: determine population size for a generation
-    receiving:
+    takes:
         an integer called the-generation
-    returning: an integer
+    delivers: an integer
     with diminishing: the-generation
     as:
-        if the-generation is-zero
+        if the-generation matches 0
             then 0
-            else if (the-generation decreased-by 1) is-zero
+            else if (the-generation decreased-by 1) matches 0
                 then 1
                 else
-                    let the-previous-generation  is an integer the-generation decreased-by 1
-                    let the-ancestral-generation is an integer the-generation decreased-by 2
+                    derivation: the-previous-generation derives-from an integer the-generation decreased-by 1
+                    derivation: the-ancestral-generation derives-from an integer the-generation decreased-by 2
                     
-                    let parent-population        is an integer the-previous-generation calculate-population
-                    let grandparent-population   is an integer the-ancestral-generation calculate-population
+                    derivation: parent-population derives-from an integer the-previous-generation utilizes calculate-population
+                    derivation: grandparent-population derives-from an integer the-ancestral-generation utilizes calculate-population
                     
                     parent-population added-to grandparent-population
 
 the effect behavior called main
     with intent: run simulation
-    receiving:
-    returning: nothing
+    takes: nothing
+    delivers: nothing
     as:
-        let final-population is an integer 10 calculate-population
-        emit final-population
+        derivation: final-population derives-from an integer 10 utilizes calculate-population
+        broadcasts final-population
 "#;
     let file_path = "fibonacci_int.onu";
     fs::write(file_path, script).unwrap();
@@ -173,7 +175,7 @@ the effect behavior called main
         .expect("Failed to execute cargo run");
 
     assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let _stdout = String::from_utf8_lossy(&output.stdout);
     fs::remove_file(file_path).unwrap();
 }
 
@@ -185,39 +187,39 @@ the module called Logistics
 
 the effect behavior called move-stack
     with intent: relocate a stack of items between piles
-    receiving:
+    takes:
         an integer called the-item-count
-        a strings called source-pile
-        a strings called destination-pile
-        a strings called transit-pile
-    returning: nothing
+        a string called source-pile
+        a string called destination-pile
+        a string called transit-pile
+    delivers: nothing
     with diminishing: the-item-count
     as:
-        if the-item-count is-zero
+        if the-item-count matches 0
             then nothing
             else
-                let the-remaining-stack is an integer the-item-count decreased-by 1
+                derivation: the-remaining-stack derives-from an integer the-item-count decreased-by 1
                 
                 -- Move n-1 disks from Source to Transit
-                let step-one is nothing the-remaining-stack move-stack source-pile transit-pile destination-pile
+                derivation: step-one derives-from nothing the-remaining-stack utilizes move-stack source-pile transit-pile destination-pile
                 
                 -- Move the biggest disk from Source to Dest
-                let msg1 is the strings "Move item " joined-with (the-item-count as-text)
-                let msg2 is the strings msg1 joined-with " from "
-                let msg3 is the strings msg2 joined-with source-pile
-                let msg4 is the strings msg3 joined-with " to "
-                let msg5 is the strings msg4 joined-with destination-pile
-                let step-two is nothing emit msg5
+                derivation: msg1 derives-from a string "Move item " joined-with (the-item-count utilizes as-text)
+                derivation: msg2 derives-from a string msg1 joined-with " from "
+                derivation: msg3 derives-from a string msg2 joined-with source-pile
+                derivation: msg4 derives-from a string msg3 joined-with " to "
+                derivation: msg5 derives-from a string msg4 joined-with destination-pile
+                derivation: step-two derives-from nothing broadcasts msg5
                 
                 -- Move n-1 disks from Transit to Dest
-                the-remaining-stack move-stack transit-pile destination-pile source-pile
+                the-remaining-stack utilizes move-stack transit-pile destination-pile source-pile
 
 the effect behavior called main
     with intent: execute logistics plan
-    receiving:
-    returning: nothing
+    takes: nothing
+    delivers: nothing
     as:
-        3 move-stack "Depot-A" "Depot-C" "Depot-B"
+        3 utilizes move-stack "Depot-A" "Depot-C" "Depot-B"
 "#;
     let file_path = "hanoi_int.onu";
     fs::write(file_path, script).unwrap();

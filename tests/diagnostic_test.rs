@@ -7,8 +7,8 @@ fn test_diagnostic_error_format() {
     let script = r#"
 the behavior called broken
     with intent: demonstrate error
-    receiving: nothing
-    returning: nothing
+    takes: nothing
+    delivers: nothing
     as:
         [ 1 2 : 3 ] -- Matrix error
 "#;

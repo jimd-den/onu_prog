@@ -60,7 +60,7 @@ impl BuiltInFunction for BothTrue {
         match (args.get(0), args.get(1)) {
             (Some(v1), Some(v2)) => Ok(to_value(v1.is_truthy() && v2.is_truthy())),
             _ => Err(OnuError::RuntimeError {
-                message: "both-true requires two arguments".to_string(),
+                message: "unites-with requires two arguments".to_string(),
                 span: Span::default(),
             }),
         }
@@ -74,7 +74,7 @@ impl BuiltInFunction for EitherTrue {
         match (args.get(0), args.get(1)) {
             (Some(v1), Some(v2)) => Ok(to_value(v1.is_truthy() || v2.is_truthy())),
             _ => Err(OnuError::RuntimeError {
-                message: "either-true requires two arguments".to_string(),
+                message: "joins-with requires two arguments".to_string(),
                 span: Span::default(),
             }),
         }
@@ -88,7 +88,7 @@ impl BuiltInFunction for NotTrue {
         match args.get(0) {
             Some(v) => Ok(to_value(!v.is_truthy())),
             None => Err(OnuError::RuntimeError {
-                message: "not-true requires one argument".to_string(),
+                message: "opposes requires one argument".to_string(),
                 span: Span::default(),
             }),
         }

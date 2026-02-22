@@ -23,35 +23,35 @@ pub struct Session {
 impl Session {
     pub fn new(env: Box<dyn Environment>) -> Self {
         let mut registry = Registry::new();
-        // Register core built-ins
+        // Register core built-ins (Academic Discourse names)
         let core_builtins = vec![
             ("joined-with", BehaviorSignature { input_types: vec![OnuType::Strings, OnuType::Strings], return_type: OnuType::Strings }),
             ("len", BehaviorSignature { input_types: vec![OnuType::Strings], return_type: OnuType::I64 }),
             ("char-at", BehaviorSignature { input_types: vec![OnuType::Strings, OnuType::I64], return_type: OnuType::I64 }),
             ("as-text", BehaviorSignature { input_types: vec![OnuType::I64], return_type: OnuType::Strings }),
             ("set-char", BehaviorSignature { input_types: vec![OnuType::Strings, OnuType::I64, OnuType::I64], return_type: OnuType::Strings }),
+            ("broadcasts", BehaviorSignature { input_types: vec![OnuType::Strings], return_type: OnuType::Nothing }),
+            ("tail-of", BehaviorSignature { input_types: vec![OnuType::Strings], return_type: OnuType::Strings }),
+            ("init-of", BehaviorSignature { input_types: vec![OnuType::Strings], return_type: OnuType::Strings }),
+            ("char-from-code", BehaviorSignature { input_types: vec![OnuType::I64], return_type: OnuType::Strings }),
         ];
         for (name, sig) in core_builtins {
             registry.add_signature(name, sig);
             registry.mark_implemented(name);
         }
 
-        // Register the Math Library as a Suite
+        // Register the Math Library as a Suite (Active-Tense)
         let math_signatures = vec![
             ("added-to", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
             ("decreased-by", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("subtracted-from", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("multiplied-by", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("divided-by", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("is-zero", BehaviorSignature { input_types: vec![OnuType::I64], return_type: OnuType::I64 }),
-            ("is-less", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("is-equal", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("both-true", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("either-true", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("not-true", BehaviorSignature { input_types: vec![OnuType::I64], return_type: OnuType::I64 }),
-            ("is-equal-to", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("is-greater-than", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("is-less-than", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("scales-by", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("partitions-by", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("matches", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("exceeds", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("falls-short-of", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("unites-with", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("joins-with", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
+            ("opposes", BehaviorSignature { input_types: vec![OnuType::I64], return_type: OnuType::I64 }),
             ("sine", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
             ("cosine", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
             ("tangent", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
@@ -70,11 +70,11 @@ impl Session {
         let math_shapes = vec![
             ("Addable", vec![
                 ("added-to".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Addable".to_string()), OnuType::Shape("Addable".to_string())], return_type: OnuType::Shape("Addable".to_string()) }),
-                ("subtracted-from".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Addable".to_string()), OnuType::Shape("Addable".to_string())], return_type: OnuType::Shape("Addable".to_string()) }),
+                ("decreased-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Addable".to_string()), OnuType::Shape("Addable".to_string())], return_type: OnuType::Shape("Addable".to_string()) }),
             ]),
             ("Multiplicable", vec![
-                ("multiplied-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Multiplicable".to_string()), OnuType::Shape("Multiplicable".to_string())], return_type: OnuType::Shape("Multiplicable".to_string()) }),
-                ("divided-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Multiplicable".to_string()), OnuType::Shape("Multiplicable".to_string())], return_type: OnuType::Shape("Multiplicable".to_string()) }),
+                ("scales-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Multiplicable".to_string()), OnuType::Shape("Multiplicable".to_string())], return_type: OnuType::Shape("Multiplicable".to_string()) }),
+                ("partitions-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Multiplicable".to_string()), OnuType::Shape("Multiplicable".to_string())], return_type: OnuType::Shape("Multiplicable".to_string()) }),
             ]),
             ("Measurable", vec![
                 ("magnitude".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Measurable".to_string())], return_type: OnuType::F64 }),
@@ -83,9 +83,12 @@ impl Session {
 
         registry.add_suite("StandardMath", math_signatures, math_shapes);
 
+        let mut interpreter = Interpreter::new(env);
+        interpreter.registry = registry.clone();
+
         Self {
             registry,
-            interpreter: Interpreter::new(env),
+            interpreter,
         }
     }
 
@@ -112,8 +115,8 @@ impl Session {
 
              match discourse {
                  Discourse::Behavior { ref header, .. } => {
-                     let inputs = header.receiving.iter().map(|a| a.type_info.onu_type.clone()).collect();
-                     let ret = header.returning.0.clone();
+                     let inputs = header.takes.iter().map(|a| a.type_info.onu_type.clone()).collect();
+                     let ret = header.delivers.0.clone();
                      self.registry.add_signature(&header.name, BehaviorSignature {
                          input_types: inputs,
                          return_type: ret,
@@ -122,8 +125,8 @@ impl Session {
                  Discourse::Shape { ref name, ref behaviors } => {
                      let mut behavior_sigs = Vec::new();
                      for bh in behaviors {
-                         let inputs = bh.receiving.iter().map(|a| a.type_info.onu_type.clone()).collect();
-                         let ret = bh.returning.0.clone();
+                         let inputs = bh.takes.iter().map(|a| a.type_info.onu_type.clone()).collect();
+                         let ret = bh.delivers.0.clone();
                          let sig = BehaviorSignature {
                              input_types: inputs,
                              return_type: ret,

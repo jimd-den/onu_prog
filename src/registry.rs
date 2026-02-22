@@ -42,6 +42,7 @@ pub fn compute_behavior_hash(body: &crate::parser::Expression, signature: &Behav
 }
 
 /// The Registry maintains a map of semantic hashes to behavior names.
+#[derive(Debug, Clone)]
 pub struct Registry {
     /// A map from semantic hash to the first name associated with that implementation.
     entries: HashMap<SemanticHash, String>, // Hash -> Name
@@ -152,17 +153,53 @@ impl Registry {
     /// Verifies if a type satisfies a specific shape (interface).
     /// Currently, this is a structural check: does the registry contain all 
     /// behaviors promised by the shape for this type?
-    /// Note: This version checks if the behavior implementation exists.
+    ///
+    /// Logic: When the parser encounters `acts-as`, the Registry must perform 
+    /// a deep comparison of the Subject's AST against the Shape's Promises.
     pub fn satisfies(&self, _type_name: &str, shape_name: &str) -> bool {
-        if let Some(required_behaviors) = self.get_shape(shape_name) {
-            for (name, _sig) in required_behaviors {
-                if !self.is_implemented(name) {
+        if let Some(required_behaviors) = self.shapes.get(shape_name) {
+            for (bh_name, required_sig) in required_behaviors {
+                // Must be implemented to satisfy a shape
+                if !self.implemented_names.contains(bh_name) {
                     return false;
+                }
+                
+                if let Some(existing_sig) = self.signatures.get(bh_name) {
+                    if existing_sig != required_sig {
+                        return false;
+                    }
                 }
             }
             true
         } else {
             false
+        }
+    }
+
+    /// High-level satisfaction check that returns a Result with a descriptive error.
+    pub fn verify_acts_as(&self, subject_name: &str, shape_name: &str) -> Result<(), OnuError> {
+        if let Some(required_behaviors) = self.shapes.get(shape_name) {
+            for (bh_name, required_sig) in required_behaviors {
+                let matched = if let Some(existing_sig) = self.signatures.get(bh_name) {
+                    existing_sig == required_sig
+                } else {
+                    self.names.contains(bh_name)
+                };
+
+                if !matched {
+                    return Err(OnuError::ParseError {
+                        message: format!("VIOLATION: [{}] refuses to act-as [{}] because it lacks the [{}] action", 
+                            subject_name, shape_name, bh_name),
+                        span: Default::default(),
+                    });
+                }
+            }
+            Ok(())
+        } else {
+            Err(OnuError::ParseError {
+                message: format!("VIOLATION: Shape [{}] is not defined in the registry", shape_name),
+                span: Default::default(),
+            })
         }
     }
 }

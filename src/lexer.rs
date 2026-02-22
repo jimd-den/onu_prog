@@ -49,6 +49,10 @@ pub enum Token {
     NoGuaranteedTermination, // Composite keyword
     Receiving,
     Returning,
+    Takes,      // New
+    Delivers,   // New
+    Derivation, // New
+    DerivesFrom,// New
     As,
     Keeps,
     KeepsInternal,
@@ -59,9 +63,24 @@ pub enum Token {
     An,
     Via,
     Role,
+    Of,         // New
     
     // --- Evaluation Control ---
     Emit,
+    Utilizes,   // New
+    ActsAs,     // New
+    Matches,    // New
+    Exceeds,    // New
+    FallsShortOf,// New
+    ScalesBy,   // New
+    PartitionsBy,// New
+    UnitesWith, // New
+    JoinsWith,  // New
+    Opposes,    // New
+    Broadcasts, // New
+    DecreasedBy,// New
+    InitOf,     // New
+    TailOf,     // New
     Nothing,
     If,
     Then,
@@ -217,13 +236,51 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Lexes identifiers and multi-word keywords.
-    /// This function handles the "The Module Called" style keywords by peeking
-    /// ahead and consuming multiple words if they match a known composite token.
     fn lex_identifier_or_keyword_multi(&mut self) -> Option<Token> {
         let first = self.lex_single_identifier_or_keyword();
 
         match first.as_str() {
+            "derivation" => Some(Token::Derivation),
+            "derives-from" => Some(Token::DerivesFrom),
+            "takes" => Some(Token::Takes),
+            "delivers" => Some(Token::Delivers),
+            "utilizes" => Some(Token::Utilizes),
+            "acts-as" => Some(Token::ActsAs),
+            "matches" => Some(Token::Matches),
+            "exceeds" => Some(Token::Exceeds),
+            "falls-short-of" => Some(Token::FallsShortOf),
+            "scales-by" => Some(Token::ScalesBy),
+            "partitions-by" => Some(Token::PartitionsBy),
+            "unites-with" => Some(Token::UnitesWith),
+            "joins-with" => Some(Token::JoinsWith),
+            "opposes" => Some(Token::Opposes),
+            "broadcasts" => Some(Token::Broadcasts),
+            "decreased-by" => Some(Token::DecreasedBy),
+            "init-of" => Some(Token::InitOf),
+            "tail-of" => Some(Token::TailOf),
+            "let" => Some(Token::Let),
+            "is" => Some(Token::Is),
+            "receiving" => Some(Token::Receiving),
+            "returning" => Some(Token::Returning),
+            "as" => Some(Token::As),
+            "exposes" => Some(Token::Exposes),
+            "promises" => Some(Token::Promises),
+            "emit" => Some(Token::Emit),
+            "nothing" => Some(Token::Nothing),
+            "if" => Some(Token::If),
+            "then" => Some(Token::Then),
+            "else" => Some(Token::Else),
+            "of" => Some(Token::Of),
+            "via" => Some(Token::Via),
+            "role" => Some(Token::Role),
+            "integer" => Some(Token::Integer),
+            "float" => Some(Token::Float),
+            "realnumber" => Some(Token::RealNumber),
+            "string" => Some(Token::Strings),
+            "matrix" => Some(Token::Matrix),
+            "true" => Some(Token::BooleanLiteral(true)),
+            "false" => Some(Token::BooleanLiteral(false)),
+
             "the" => {
                 let saved_line = self.line;
                 let saved_column = self.column;
@@ -318,18 +375,6 @@ impl<'a> Lexer<'a> {
                     Some(Token::Keeps)
                 }
             }
-            "let" => Some(Token::Let),
-            "is" => Some(Token::Is),
-            "receiving" => Some(Token::Receiving),
-            "returning" => Some(Token::Returning),
-            "as" => Some(Token::As),
-            "exposes" => Some(Token::Exposes),
-            "promises" => Some(Token::Promises),
-            "emit" => Some(Token::Emit),
-            "nothing" => Some(Token::Nothing),
-            "if" => Some(Token::If),
-            "then" => Some(Token::Then),
-            "else" => Some(Token::Else),
             "a" => {
                 let saved_line = self.line;
                 let saved_column = self.column;
@@ -374,15 +419,6 @@ impl<'a> Lexer<'a> {
                 self.input = saved_input;
                 Some(Token::An)
             }
-            "via" => Some(Token::Via),
-            "role" => Some(Token::Role),
-            "integer" => Some(Token::Integer),
-            "float" => Some(Token::Float),
-            "realnumber" => Some(Token::RealNumber),
-            "strings" => Some(Token::Strings),
-            "matrix" => Some(Token::Matrix),
-            "true" => Some(Token::BooleanLiteral(true)),
-            "false" => Some(Token::BooleanLiteral(false)),
             _ => Some(Token::Identifier(first)),
         }
     }
@@ -470,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_lex_specific_types() {
-        let input = "integer float realnumber strings matrix";
+        let input = "integer float realnumber string matrix";
         let mut lexer = Lexer::new(input);
         assert_eq!(lexer.next_token().unwrap().token, Token::Integer);
         assert_eq!(lexer.next_token().unwrap().token, Token::Float);
@@ -578,5 +614,49 @@ mod tests {
         assert_eq!(t3.token, Token::Is);
         assert_eq!(t3.span.line, 2);
         assert_eq!(t3.span.column, 3);
+    }
+
+    #[test]
+    fn test_lex_active_tense_keywords() {
+        let input = "derivation: x derives-from 10\nthe behavior called ackermann takes: m delivers integer\nackermann utilizes m n\nx acts-as Measurable\nmatches exceeds falls-short-of\nscales-by partitions-by unites-with joins-with opposes broadcasts decreased-by init-of tail-of";
+        let mut lexer = Lexer::new(input);
+        
+        // ... (lines omitted for brevity)
+        assert_eq!(lexer.next_token().unwrap().token, Token::Derivation);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Colon);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("x".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::DerivesFrom);
+        assert_eq!(lexer.next_token().unwrap().token, Token::IntegerLiteral(10));
+
+        assert_eq!(lexer.next_token().unwrap().token, Token::TheBehaviorCalled);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("ackermann".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::Takes);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Colon);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("m".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::Delivers);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Integer);
+
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("ackermann".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::Utilizes);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("m".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("n".to_string()));
+
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("x".to_string()));
+        assert_eq!(lexer.next_token().unwrap().token, Token::ActsAs);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Identifier("Measurable".to_string()));
+
+        assert_eq!(lexer.next_token().unwrap().token, Token::Matches);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Exceeds);
+        assert_eq!(lexer.next_token().unwrap().token, Token::FallsShortOf);
+
+        assert_eq!(lexer.next_token().unwrap().token, Token::ScalesBy);
+        assert_eq!(lexer.next_token().unwrap().token, Token::PartitionsBy);
+        assert_eq!(lexer.next_token().unwrap().token, Token::UnitesWith);
+        assert_eq!(lexer.next_token().unwrap().token, Token::JoinsWith);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Opposes);
+        assert_eq!(lexer.next_token().unwrap().token, Token::Broadcasts);
+        assert_eq!(lexer.next_token().unwrap().token, Token::DecreasedBy);
+        assert_eq!(lexer.next_token().unwrap().token, Token::InitOf);
+        assert_eq!(lexer.next_token().unwrap().token, Token::TailOf);
     }
 }

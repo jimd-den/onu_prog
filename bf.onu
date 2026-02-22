@@ -1,141 +1,158 @@
--- Brainfuck Interpreter with Debugging
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Discourse Unit: The Esoteric Tape Machine (Brainfuck)
+-- Concern: Simulating a minimalist Turing machine.
+--
+-- This discourse implements a Brainfuck interpreter. It perceives the program
+-- as a series of instructions that manipulate a "Data Tape":
+-- 1. Pointer Shifts: Move the attention left (<) or right (>).
+-- 2. Value Oscillations: Increase (+) or decrease (-) the value at the pointer.
+-- 3. Broadcasts: Output (.) the current value as a character.
+-- 4. Jump Gates: Navigate loops ([ and ]) based on the current value.
+-- ═══════════════════════════════════════════════════════════════════════════
 
-the module called Emulation
-    with concern: esoteric languages
+the module called TapeMachine
+    with concern: esoteric language emulation
 
-the behavior called get-tape-val
-    with intent: get value at data pointer
-    receiving:
-        a text called tape
-        an integer called dp
-    returning: an integer
+-- Extract the current intensity from the tape at the given position.
+the behavior called read-tape
+    with intent: get the value at the current focus
+    takes:
+        a string called tape
+        an integer called focus
+    delivers: an integer
     as:
-        tape char-at dp
+        tape char-at focus
 
-the behavior called set-tape-val
-    with intent: set value at data pointer
-    receiving:
-        a text called tape
-        an integer called dp
-        an integer called val
-    returning: a text
+-- Update the intensity at the given position on the tape.
+the behavior called write-tape
+    with intent: set a new value at the current focus
+    takes:
+        a string called tape
+        an integer called focus
+        an integer called value
+    delivers: a string
     as:
-        tape set-char dp val
+        tape utilizes set-char focus value
 
-the behavior called jump-forward
-    with intent: find matching closing bracket
-    receiving:
-        a text called code
-        an integer called ip
-        an integer called counter
-    returning: an integer
-    with diminishing: counter
+-- Rule: Forward Jump Gate
+-- When the focus value is zero, we must jump forward to find the 
+-- matching exit gate (']').
+the behavior called navigate-forward-to-exit
+    with intent: find the matching closing bracket
+    takes:
+        a string called code
+        an integer called instruction-pointer
+        an integer called depth-counter
+    delivers: an integer
+    with no guaranteed termination
     as:
-        let char is an integer code char-at ip
-        let next-ip is an integer ip added-to 1
+        derivation: current-instr derives-from an integer code char-at instruction-pointer
+        derivation: next-ip derives-from an integer instruction-pointer added-to 1
         
-        if char is-equal 91
-            then code jump-forward next-ip (counter added-to 1)
+        if current-instr matches 91 -- '['
+            then code utilizes navigate-forward-to-exit next-ip (depth-counter added-to 1)
             else 
-                if char is-equal 93
+                if current-instr matches 93 -- ']'
                     then
-                        if counter is-equal 0
-                            then ip
-                            else code jump-forward next-ip (counter decreased-by 1)
-                    else code jump-forward next-ip counter
+                        if depth-counter matches 0
+                            then instruction-pointer
+                            else code utilizes navigate-forward-to-exit next-ip (depth-counter decreased-by 1)
+                    else code utilizes navigate-forward-to-exit next-ip depth-counter
 
-the behavior called jump-backward
-    with intent: find matching opening bracket
-    receiving:
-        a text called code
-        an integer called ip
-        an integer called counter
-    returning: an integer
-    with diminishing: ip
+-- Rule: Backward Jump Gate
+-- When the focus value is non-zero, we must jump backward to find the 
+-- matching entrance gate ('[').
+the behavior called navigate-backward-to-entrance
+    with intent: find the matching opening bracket
+    takes:
+        a string called code
+        an integer called instruction-pointer
+        an integer called depth-counter
+    delivers: an integer
+    with no guaranteed termination
     as:
-        let char is an integer code char-at ip
-        let prev-ip is an integer ip decreased-by 1
+        derivation: current-instr derives-from an integer code char-at instruction-pointer
+        derivation: prev-ip derives-from an integer instruction-pointer decreased-by 1
         
-        if char is-equal 93
-            then code jump-backward prev-ip (counter added-to 1)
+        if current-instr matches 93 -- ']'
+            then code utilizes navigate-backward-to-entrance prev-ip (depth-counter added-to 1)
             else
-                if char is-equal 91
+                if current-instr matches 91 -- '['
                     then
-                        if counter is-equal 0
-                            then ip
-                            else code jump-backward prev-ip (counter decreased-by 1)
-                    else code jump-backward prev-ip counter
+                        if depth-counter matches 0
+                            then instruction-pointer
+                            else code utilizes navigate-backward-to-entrance prev-ip (depth-counter decreased-by 1)
+                    else code utilizes navigate-backward-to-entrance prev-ip depth-counter
 
-the effect behavior called execute
-    with intent: run the bf machine
-    receiving:
-        a text called code
+-- The Execution Engine
+-- Iterates through the code, performing active transformations on the tape state.
+the effect behavior called interpret
+    with intent: execute the sequence of tape instructions
+    takes:
+        a string called code
         an integer called ip
-        a text called tape
-        an integer called dp
-    returning: nothing
-    with diminishing: code
+        a string called tape
+        an integer called focus
+    delivers: nothing
+    with no guaranteed termination
     as:
-        if ip is-less (code len)
+        if ip falls-short-of (code utilizes len)
             then
-                let instr is an integer code char-at ip
-                let next-ip is an integer ip added-to 1
+                derivation: instr derives-from an integer code char-at ip
+                derivation: next-ip derives-from an integer ip added-to 1
                 
-                if instr is-equal 43
+                if instr matches 43 -- '+' (Oscillate Up)
                     then
-                        let val is an integer tape get-tape-val dp
-                        let new-val is an integer val added-to 1
-                        let dummy is nothing emit "Plus"
-                        let new-tape is a text tape set-tape-val dp new-val
-                        code execute next-ip new-tape dp
+                        derivation: val derives-from an integer tape utilizes read-tape focus
+                        derivation: new-tape derives-from a string tape utilizes write-tape focus (val added-to 1)
+                        code utilizes interpret next-ip new-tape focus
                     else
-                if instr is-equal 45
+                if instr matches 45 -- '-' (Oscillate Down)
                     then
-                        let val is an integer tape get-tape-val dp
-                        let new-val is an integer val decreased-by 1
-                        let dummy is nothing emit "Minus"
-                        let new-tape is a text tape set-tape-val dp new-val
-                        code execute next-ip new-tape dp
+                        derivation: val derives-from an integer tape utilizes read-tape focus
+                        derivation: new-tape derives-from a string tape utilizes write-tape focus (val decreased-by 1)
+                        code utilizes interpret next-ip new-tape focus
                     else
-                if instr is-equal 62
-                    then code execute next-ip tape (dp added-to 1)
+                if instr matches 62 -- '>' (Shift Focus Right)
+                    then code utilizes interpret next-ip tape (focus added-to 1)
                     else
-                if instr is-equal 60
-                    then code execute next-ip tape (dp decreased-by 1)
+                if instr matches 60 -- '<' (Shift Focus Left)
+                    then code utilizes interpret next-ip tape (focus decreased-by 1)
                     else
-                if instr is-equal 46
+                if instr matches 46 -- '.' (Broadcast State)
                     then
-                        let val is an integer tape get-tape-val dp
-                        let dummy is nothing emit (val as-text)
-                        code execute next-ip tape dp
+                        derivation: val derives-from an integer tape utilizes read-tape focus
+                        derivation: dummy derives-from nothing broadcasts (val utilizes char-from-code)
+                        code utilizes interpret next-ip tape focus
                     else
-                if instr is-equal 91
+                if instr matches 91 -- '[' (Enter Gate)
                     then
-                        let val is an integer tape get-tape-val dp
-                        if val is-equal 0
+                        derivation: val derives-from an integer tape utilizes read-tape focus
+                        if val matches 0
                             then
-                                let target is an integer code jump-forward next-ip 0
-                                code execute (target added-to 1) tape dp
-                            else code execute next-ip tape dp
+                                derivation: target derives-from an integer code utilizes navigate-forward-to-exit next-ip 0
+                                code utilizes interpret (target added-to 1) tape focus
+                            else code utilizes interpret next-ip tape focus
                     else
-                if instr is-equal 93
+                if instr matches 93 -- ']' (Exit Gate)
                     then
-                        let val is an integer tape get-tape-val dp
-                        if val is-equal 0
-                            then code execute next-ip tape dp
+                        derivation: val derives-from an integer tape utilizes read-tape focus
+                        if val matches 0
+                            then code utilizes interpret next-ip tape focus
                             else
-                                let target is an integer code jump-backward (ip decreased-by 1) 0
-                                code execute (target added-to 1) tape dp
+                                derivation: target derives-from an integer code utilizes navigate-backward-to-entrance (ip decreased-by 1) 0
+                                code utilizes interpret (target added-to 1) tape focus
                     else
-                        code execute next-ip tape dp
+                        code utilizes interpret next-ip tape focus
             else nothing
 
 the effect behavior called run
-    with intent: run a bf program
-    receiving:
-    returning: nothing
+    with intent: demonstrate the esoteric tape machine
+    takes: nothing
+    delivers: nothing
     as:
-        let tape is a text "          " 
-        let code is a text "++."
-        let dummy is nothing emit "Running BF: ++."
-        code execute 0 tape 0
+        derivation: empty-tape derives-from a string "          " 
+        derivation: program    derives-from a string "++>+++<[->+<]>." -- Result: 2 + 3 = 5 (char code 5)
+        derivation: d1         derives-from nothing broadcasts "Initializing Tape Machine..."
+        program utilizes interpret 0 empty-tape 0
+        nothing

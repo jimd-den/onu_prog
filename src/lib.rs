@@ -1,29 +1,31 @@
 use crate::lexer::Lexer;
 use crate::registry::{Registry, BehaviorSignature};
 use crate::parser::{Parser, Discourse};
-use crate::interpreter::{Interpreter, Value};
-use crate::env::Environment;
 use crate::types::OnuType;
+use crate::error::OnuError;
 
 pub mod env;
 pub mod error;
-pub mod interpreter;
 pub mod lexer;
 pub mod parser;
 pub mod registry;
-pub mod builtins;
 pub mod types;
 pub mod linguistics;
+pub mod hir;
+pub mod monomorphize;
+pub mod mir;
+pub mod codegen;
 
-pub struct Session {
-    registry: Registry,
-    interpreter: Interpreter,
+pub struct CompilerSession {
+    pub registry: Registry,
+    pub ast: Vec<Discourse>,
+    pub hir: Vec<crate::hir::HirDiscourse>,
+    pub mir: Option<crate::mir::MirProgram>,
 }
 
-impl Session {
-    pub fn new(env: Box<dyn Environment>) -> Self {
+impl CompilerSession {
+    pub fn new() -> Result<Self, String> {
         let mut registry = Registry::new();
-        // Register core built-ins (Academic Discourse names)
         let core_builtins = vec![
             ("joined-with", BehaviorSignature { input_types: vec![OnuType::Strings, OnuType::Strings], return_type: OnuType::Strings }),
             ("len", BehaviorSignature { input_types: vec![OnuType::Strings], return_type: OnuType::I64 }),
@@ -40,7 +42,6 @@ impl Session {
             registry.mark_implemented(name);
         }
 
-        // Register the Math Library as a Suite (Active-Tense)
         let math_signatures = vec![
             ("added-to", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
             ("decreased-by", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
@@ -49,24 +50,8 @@ impl Session {
             ("matches", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
             ("exceeds", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
             ("falls-short-of", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("unites-with", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("joins-with", BehaviorSignature { input_types: vec![OnuType::I64, OnuType::I64], return_type: OnuType::I64 }),
-            ("opposes", BehaviorSignature { input_types: vec![OnuType::I64], return_type: OnuType::I64 }),
-            ("sine", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("cosine", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("tangent", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("arcsin", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("arccos", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("arctan", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("square-root", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("raised-to", BehaviorSignature { input_types: vec![OnuType::F64, OnuType::F64], return_type: OnuType::F64 }),
-            ("natural-log", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("exponent", BehaviorSignature { input_types: vec![OnuType::F64], return_type: OnuType::F64 }),
-            ("dot-product", BehaviorSignature { input_types: vec![OnuType::Tuple(vec![]), OnuType::Tuple(vec![])], return_type: OnuType::F64 }),
-            ("cross-product", BehaviorSignature { input_types: vec![OnuType::Tuple(vec![]), OnuType::Tuple(vec![])], return_type: OnuType::Tuple(vec![]) }),
-            ("determinant", BehaviorSignature { input_types: vec![OnuType::Matrix], return_type: OnuType::F64 }),
         ];
-
+        
         let math_shapes = vec![
             ("Addable", vec![
                 ("added-to".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Addable".to_string()), OnuType::Shape("Addable".to_string())], return_type: OnuType::Shape("Addable".to_string()) }),
@@ -76,130 +61,120 @@ impl Session {
                 ("scales-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Multiplicable".to_string()), OnuType::Shape("Multiplicable".to_string())], return_type: OnuType::Shape("Multiplicable".to_string()) }),
                 ("partitions-by".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Multiplicable".to_string()), OnuType::Shape("Multiplicable".to_string())], return_type: OnuType::Shape("Multiplicable".to_string()) }),
             ]),
-            ("Measurable", vec![
-                ("magnitude".to_string(), BehaviorSignature { input_types: vec![OnuType::Shape("Measurable".to_string())], return_type: OnuType::F64 }),
-            ]),
         ];
 
         registry.add_suite("StandardMath", math_signatures, math_shapes);
 
-        let mut interpreter = Interpreter::new(env);
-        interpreter.registry = registry.clone();
-
-        Self {
+        Ok(Self {
             registry,
-            interpreter,
-        }
+            ast: Vec::new(),
+            hir: Vec::new(),
+            mir: None,
+        })
     }
 
-    pub fn run_script(&mut self, script: &str) -> Result<(), String> {
-        let mut lexer = Lexer::new(script);
-        let mut tokens = Vec::new();
-        while let Some(t_with_span) = lexer.next_token() {
-            tokens.push(t_with_span);
+    pub fn compile(&mut self, _source: &str) -> Result<Vec<u8>, OnuError> {
+        if _source.is_empty() {
+             return Ok(Vec::new());
         }
-
-        // Pass 1: Structural Pass (Populate Registry Signatures)
+        let tokens = self.lex(_source).map_err(|e| OnuError::LexicalError { message: e, span: Default::default() })?;
+        
         let mut current_pos = 0;
         while current_pos < tokens.len() {
-             let discourse = {
-                 let mut parser = Parser::new(&tokens[current_pos..]);
-                 let d = parser.parse_structural_discourse().map_err(|e| format!("Structural Parse Error: {}", e))?;
-                 current_pos += parser.pos;
-                 d
-             };
-
-             // Linguistic Validation (a/an)
-             crate::linguistics::LinguisticValidator::validate(&discourse)
-                 .map_err(|e| format!("Linguistic Error: {}", e))?;
-
-             match discourse {
-                 Discourse::Behavior { ref header, .. } => {
-                     let inputs = header.takes.iter().map(|a| a.type_info.onu_type.clone()).collect();
-                     let ret = header.delivers.0.clone();
-                     self.registry.add_signature(&header.name, BehaviorSignature {
-                         input_types: inputs,
-                         return_type: ret,
-                     });
-                 }
-                 Discourse::Shape { ref name, ref behaviors } => {
-                     let mut behavior_sigs = Vec::new();
-                     for bh in behaviors {
-                         let inputs = bh.takes.iter().map(|a| a.type_info.onu_type.clone()).collect();
-                         let ret = bh.delivers.0.clone();
-                         let sig = BehaviorSignature {
+             let mut parser = Parser::new(&tokens[current_pos..]);
+             if let Ok(discourse) = parser.parse_structural_discourse() {
+                 match discourse {
+                     Discourse::Behavior { ref header, .. } => {
+                         let inputs = header.takes.iter().map(|a| a.type_info.onu_type.clone()).collect();
+                         let ret = header.delivers.0.clone();
+                         self.registry.add_signature(&header.name, BehaviorSignature {
                              input_types: inputs,
                              return_type: ret,
-                         };
-                         self.registry.add_signature(&bh.name, sig.clone());
-                         behavior_sigs.push((bh.name.clone(), sig));
+                         });
                      }
-                     self.registry.add_shape(name, behavior_sigs);
+                     Discourse::Shape { ref name, ref behaviors } => {
+                         let mut behavior_sigs = Vec::new();
+                         for bh in behaviors {
+                             let inputs = bh.takes.iter().map(|a| a.type_info.onu_type.clone()).collect();
+                             let ret = bh.delivers.0.clone();
+                             let sig = BehaviorSignature {
+                                 input_types: inputs,
+                                 return_type: ret,
+                             };
+                             self.registry.add_signature(&bh.name, sig.clone());
+                             behavior_sigs.push((bh.name.clone(), sig));
+                         }
+                         self.registry.add_shape(name, behavior_sigs);
+                     }
+                     _ => {}
                  }
-                 _ => {}
+                 current_pos += parser.pos;
+             } else {
+                 break;
              }
         }
 
-        // Pass 2: Semantic Pass (Full Logic and Disambiguation)
-        let mut behaviors_to_run = Vec::new();
-        let mut concern_validator = crate::interpreter::ConcernValidator::new();
-        current_pos = 0;
-        while current_pos < tokens.len() {
-             let discourse = {
-                let mut parser = Parser::with_registry(&tokens[current_pos..], &self.registry);
-                let d = parser.parse_discourse().map_err(|e| format!("Semantic Parse Error: {}", e))?;
-                current_pos += parser.pos;
-                d
-            };
+        self.ast = self.parse(&tokens)?;
+        self.hir = self.lower(&self.ast).map_err(|e| OnuError::MonomorphizationError { message: e })?;
+        let mir = Self::analyze(&mut self.hir, &self.registry).map_err(|e| OnuError::MonomorphizationError { message: e })?;
+        self.mir = Some(mir.clone());
+        let binary = self.emit(&mir).map_err(|e| OnuError::CodeGenError { message: e })?;
+        
+        Ok(binary)
+    }
 
-            // Concern Validation (SRP Enforcement)
-            concern_validator.check(&discourse).map_err(|e| format!("Semantic Analysis Error: {}", e))?;
+    pub fn get_llvm_ir(&self, _source: &str) -> Result<String, OnuError> {
+        let mut session = Self::new().unwrap();
+        session.compile(_source)?;
+        let context = inkwell::context::Context::create();
+        let generator = crate::codegen::LlvmGenerator::new(&context, "onu_module", Some(session.registry.clone()));
+        use crate::codegen::CodeGenerator;
+        generator.generate(session.mir.as_ref().unwrap()).map_err(|e| OnuError::CodeGenError { message: e })?;
+        Ok(generator.get_ir_string())
+    }
 
-            match discourse {
-                Discourse::Behavior { ref header, ref body } => {
-                    // Termination Check (Proof-Based Structural Recursion)
-                    let mut term_checker = crate::interpreter::TerminationChecker::new(&self.registry);
-                    term_checker.check(&discourse).map_err(|e| format!("Semantic Analysis Error: {}", e))?;
-
-                    // Shape Verification (Structural Subtyping)
-                    let mut shape_validator = crate::interpreter::ShapeValidator::new(&self.registry);
-                    shape_validator.check(&discourse).map_err(|e| format!("Semantic Analysis Error: {}", e))?;
-
-                    // DRY Enforcement: Semantic Hashing (including Type Signatures)
-                    let signature = self.registry.get_signature(&header.name).cloned().unwrap();
-                    let hash = crate::registry::compute_behavior_hash(body, &signature);
-                    
-                    if let Err(e) = self.registry.register(header.name.clone(), hash) {
-                        return Err(format!("DRY Error: {}", e));
-                    }
-
-                    println!("Behavior '{}' parsed and registered", header.name);
-                    self.interpreter.register_behavior(discourse.clone());
-                    
-                    if header.name == "run" || header.name == "main" {
-                        behaviors_to_run.push(discourse.clone());
-                    }
-                }
-                Discourse::Module { ref name, .. } => {
-                    println!("Found module '{}'", name);
-                }
-                _ => {}
-            }
+    fn lex(&self, _source: &str) -> Result<Vec<crate::lexer::TokenWithSpan>, String> {
+        let mut lexer = Lexer::new(_source);
+        let mut tokens = Vec::new();
+        while let Some(t) = lexer.next_token() {
+            tokens.push(t);
         }
+        Ok(tokens)
+    }
 
-        for behavior in behaviors_to_run {
-            match self.interpreter.execute_discourse(&behavior) {
-                Ok(result) => {
-                    if result != Value::Void {
-                        // In a real session, we might want to return these values
-                    }
-                }
-                Err(e) => {
-                    return Err(format!("Runtime Error: {}", e));
-                }
-            }
+    fn parse(&self, _tokens: &[crate::lexer::TokenWithSpan]) -> Result<Vec<Discourse>, OnuError> {
+        let mut current_pos = 0;
+        let mut ast = Vec::new();
+        while current_pos < _tokens.len() {
+             let mut parser = Parser::with_registry(&_tokens[current_pos..], &self.registry);
+             match parser.parse_discourse() {
+                 Ok(discourse) => {
+                     current_pos += parser.pos;
+                     ast.push(discourse);
+                 }
+                 Err(e) => {
+                     return Err(e);
+                 }
+             }
         }
+        Ok(ast)
+    }
 
-        Ok(())
+    fn lower(&self, _ast: &[Discourse]) -> Result<Vec<crate::hir::HirDiscourse>, String> {
+        Ok(_ast.iter().map(crate::hir::LoweringVisitor::lower_discourse).collect())
+    }
+
+    fn analyze(hir: &mut Vec<crate::hir::HirDiscourse>, registry: &Registry) -> Result<crate::mir::MirProgram, String> {
+        crate::monomorphize::Monomorphizer::run(hir);
+        let mut builder = crate::mir::MirBuilder::new();
+        // Pass registry info if needed for builder
+        Ok(builder.build_program_with_registry(hir, registry))
+    }
+
+    fn emit(&self, _mir: &crate::mir::MirProgram) -> Result<Vec<u8>, String> {
+        use crate::codegen::CodeGenerator;
+        let context = inkwell::context::Context::create();
+        let generator = crate::codegen::LlvmGenerator::new(&context, "onu_module", Some(self.registry.clone()));
+        generator.generate(_mir)
     }
 }

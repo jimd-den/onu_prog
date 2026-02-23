@@ -2,12 +2,40 @@
 
 Ọ̀nụ (meaning "voice" or "utterance") is a Turing-complete programming language whose syntax is designed as a **Formal Discourse**. It enforces strict Subject-Verb-Object (SVO) topology and the **Agency Principle**, where code is expressed as a series of active, direct, and verifiable events.
 
+## Prerequisites
+
+Ọ̀nụ requires **LLVM 14** and the **Polly** optimization library installed on your system.
+
+**Debian/Ubuntu:**
+```bash
+sudo apt-get install llvm-14 lli-14 clang-14 libpolly-14-dev
+```
+
 ## Usage
 
-To execute an Ọ̀nụ discourse unit, use the standard command:
+To compile an Ọ̀nụ discourse unit to LLVM Bitcode:
 
 ```bash
-cargo run -- <filename>.onu
+LLVM_SYS_140_PREFIX=/usr/lib/llvm-14 cargo run -- <filename>.onu
+```
+
+To compile and immediately execute the program (JIT):
+
+```bash
+LLVM_SYS_140_PREFIX=/usr/lib/llvm-14 cargo run -- <filename>.onu --run
+```
+
+To compile to a high-performance native binary (-O3):
+
+```bash
+LLVM_SYS_140_PREFIX=/usr/lib/llvm-14 cargo run -- <filename>.onu --native
+./onu_prog
+```
+
+To inspect the generated LLVM IR:
+
+```bash
+LLVM_SYS_140_PREFIX=/usr/lib/llvm-14 cargo run -- <filename>.onu --ir
 ```
 
 ## The Agency Principle

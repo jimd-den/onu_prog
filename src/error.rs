@@ -24,6 +24,9 @@ pub enum OnuError {
     ParseError { message: String, span: Span },
     RuntimeError { message: String, span: Span },
     BehaviorConflict { name: String, other_name: String },
+    MonomorphizationError { message: String },
+    BorrowError { message: String, span: Span },
+    CodeGenError { message: String },
 }
 
 impl fmt::Display for OnuError {
@@ -52,6 +55,21 @@ impl fmt::Display for OnuError {
                 write!(f, "Observation: Duplicate semantic implementation detected.\n")?;
                 write!(f, "Assessment:  The behavior '{}' is semantically identical to '{}'.\n", name, other_name)?;
                 write!(f, "Conclusion:  This violates the Principle of Non-Repetition (DRY).\n")
+            }
+            OnuError::MonomorphizationError { message } => {
+                write!(f, "Observation: The polymorphic expansion failed.\n")?;
+                write!(f, "Assessment:  {}\n", message)?;
+                write!(f, "Conclusion:  Interface dispatch must resolve to concrete types at compile-time.\n")
+            }
+            OnuError::BorrowError { message, span } => {
+                write!(f, "Observation: A memory safety violation detected at {}.\n", span)?;
+                write!(f, "Assessment:  {}\n", message)?;
+                write!(f, "Conclusion:  The resource ownership rules are absolute and must be obeyed.\n")
+            }
+            OnuError::CodeGenError { message } => {
+                write!(f, "Observation: Lowering to machine discourse failed.\n")?;
+                write!(f, "Assessment:  {}\n", message)?;
+                write!(f, "Conclusion:  The architectural design cannot be realized in the target hardware.\n")
             }
         }
     }

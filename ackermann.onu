@@ -88,11 +88,11 @@ the effect behavior called run
 
         derivation: msg1 derives-from nothing broadcasts "Solving Spiral(2, 2)..."
         derivation: res1 derives-from an integer 2 utilizes ackermann 2
-        derivation: out1 derives-from nothing broadcasts res1
+        derivation: out1 derives-from nothing broadcasts (res1 utilizes as-text)
 
         derivation: msg2 derives-from nothing broadcasts "Solving Spiral(3, 2)..."
         derivation: res2 derives-from an integer 3 utilizes ackermann 2
-        derivation: out2 derives-from nothing broadcasts res2
+        derivation: out2 derives-from nothing broadcasts (res2 utilizes as-text)
         
         derivation: d5   derives-from nothing broadcasts line
         nothing

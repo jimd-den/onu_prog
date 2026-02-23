@@ -350,7 +350,9 @@ impl<'a, 'b> Parser<'a, 'b> {
         self.is_pure_context = !header.is_effect;
         
         self.consume(Token::As)?;
-        self.consume(Token::Colon)?;
+        if let Some(Token::Colon) = self.peek_token() {
+            self.consume(Token::Colon)?;
+        }
         
         let mut expressions = Vec::new();
         while let Some(token) = self.peek_token() {
@@ -398,7 +400,6 @@ impl<'a, 'b> Parser<'a, 'b> {
         Ok(Discourse::Behavior { header, body })
     }
 
-    /// Parses an expression using SVO (Subject-Verb-Object) Infix topology.
     pub fn parse_expression(&mut self) -> Result<Expression, OnuError> {
         self.enter_expression()?;
 
@@ -406,16 +407,28 @@ impl<'a, 'b> Parser<'a, 'b> {
         
         while let Some(token) = self.peek_token() {
             match token {
-                Token::Utilizes | Token::Identifier(_) | 
+                Token::Utilizes | Token::Receiving => {
+                    self.pos += 1;
+                    let behavior_name = self.consume_identifier(false)?;
+                    
+                    let mut args = Vec::new();
+                    args.push(left);
+                    
+                    let arity = self.registry.and_then(|r| r.get_arity(&behavior_name)).unwrap_or(1);
+                    
+                    for _ in 0..(arity.saturating_sub(1)) {
+                        args.push(self.parse_primary()?);
+                    }
+                    
+                    left = Expression::BehaviorCall { name: behavior_name, args };
+                    continue;
+                }
+                Token::Identifier(_) | 
                 Token::Matches | Token::Exceeds | Token::FallsShortOf | 
                 Token::ScalesBy | Token::PartitionsBy | 
                 Token::UnitesWith | Token::JoinsWith | Token::Opposes | 
                 Token::DecreasedBy | Token::InitOf | Token::TailOf => {
                     let name = match token {
-                        Token::Utilizes => {
-                            self.pos += 1;
-                            self.consume_identifier(false)?
-                        }
                         Token::Identifier(ref n) => n.clone(),
                         Token::Matches => "matches".to_string(),
                         Token::Exceeds => "exceeds".to_string(),
@@ -431,21 +444,27 @@ impl<'a, 'b> Parser<'a, 'b> {
                         _ => unreachable!(),
                     };
 
+                    let mut is_behavior = false;
+                    let mut arity = 0;
                     if let Some(registry) = self.registry {
                         if registry.is_registered(&name) {
-                            if !matches!(token, Token::Utilizes) {
-                                self.pos += 1;
-                            }
-                            let arity = registry.get_arity(&name).unwrap_or(0);
-                            let mut args = Vec::new();
-                            args.push(left);
-                            
-                            for _ in 0..(arity.saturating_sub(1)) {
-                                args.push(self.parse_primary()?);
-                            }
-                            left = Expression::BehaviorCall { name, args };
-                            continue;
+                            is_behavior = true;
+                            arity = registry.get_arity(&name).unwrap_or(0);
                         }
+                    }
+
+                    if is_behavior {
+                        self.pos += 1;
+                        let mut args = Vec::new();
+                        args.push(left);
+                        
+                        for _ in 0..(arity.saturating_sub(1)) {
+                            args.push(self.parse_primary()?);
+                        }
+                        left = Expression::BehaviorCall { name, args };
+                        continue;
+                    } else {
+                        break;
                     }
                 }
                 Token::ActsAs => {
@@ -469,7 +488,8 @@ impl<'a, 'b> Parser<'a, 'b> {
     /// Parses primary expressions (literals, variables, keywords with markers, parenthesized expressions).
     fn parse_primary(&mut self) -> Result<Expression, OnuError> {
         let span = self.current_span();
-        match self.peek_token() {
+        let peeked = self.peek_token();
+        match peeked {
             Some(Token::NumericLiteral(n)) => {
                 self.pos += 1;
                 Ok(Expression::F64(n))
@@ -573,12 +593,9 @@ impl<'a, 'b> Parser<'a, 'b> {
                     });
                 }
                 self.pos += 1;
-                let value = Box::new(self.parse_expression()?);
-                if token == Token::Emit {
-                    Ok(Expression::Emit(value))
-                } else {
-                    Ok(Expression::Broadcasts(value))
-                }
+                let value = self.parse_expression()?;
+                let name = if token == Token::Emit { "emit" } else { "broadcasts" };
+                Ok(Expression::BehaviorCall { name: name.to_string(), args: vec![value] })
             }
             Some(Token::Derivation) => {
                 self.consume(Token::Derivation)?;
@@ -738,49 +755,44 @@ impl<'a, 'b> Parser<'a, 'b> {
             if let Some(Token::Colon) = self.peek_token() {
                 self.consume(Token::Colon)?;
             }
-        } else {
+        } else if let Some(Token::Receiving) = self.peek_token() {
             self.consume(Token::Receiving)?;
             self.consume(Token::Colon)?;
         }
         
-        // Handle explicit 'receiving: nothing' or 'takes: nothing'
-        if let Some(Token::Nothing) = self.peek_token() {
-            self.consume(Token::Nothing)?;
-        } else {
-            while let Some(token) = self.peek_token() {
-                if matches!(token, Token::Returning | Token::Delivers | Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination) {
-                    break;
-                }
-                
-                let mut type_info = self.parse_type_info()?;
-                
-                if let Some(Token::Called) = self.peek_token() {
-                    self.consume(Token::Called)?;
-                } else if let Some(Token::Identifier(ref s)) = self.peek_token() {
-                    if s == "called" {
-                        self.pos += 1;
+        if !matches!(self.peek_token(), Some(Token::Returning | Token::Delivers | Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination)) {
+            // Handle explicit 'receiving: nothing' or 'takes: nothing'
+            if let Some(Token::Nothing) = self.peek_token() {
+                self.consume(Token::Nothing)?;
+            } else {
+                while let Some(token) = self.peek_token() {
+                    if matches!(token, Token::Returning | Token::Delivers | Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination) {
+                        break;
                     }
-                }
-                
-                let var_name = self.consume_identifier(true)?;
+                    
+                    let type_info = self.parse_type_info()?;
+                    
+                    if let Some(Token::Called) = self.peek_token() {
+                        self.consume(Token::Called)?;
+                    } else if let Some(Token::Identifier(ref s)) = self.peek_token() {
+                        if s == "called" {
+                            self.pos += 1;
+                        }
+                    }
+                    
+                    let var_name = self.consume_identifier(true)?;
 
-                if let Some(Token::Via) = self.peek_token() {
-                    self.consume(Token::Via)?;
-                    self.consume(Token::The)?;
-                    self.consume(Token::Role)?;
-                    type_info.via_role = Some(self.consume_identifier(false)?);
+                    takes.push(Argument {
+                        name: var_name,
+                        type_info,
+                    });
                 }
-
-                takes.push(Argument {
-                    name: var_name,
-                    type_info,
-                });
             }
         }
 
         if let Some(Token::Delivers) = self.peek_token() {
             self.consume(Token::Delivers)?;
-        } else {
+        } else if let Some(Token::Returning) = self.peek_token() {
             self.consume(Token::Returning)?;
         }
 
@@ -788,7 +800,16 @@ impl<'a, 'b> Parser<'a, 'b> {
             self.consume(Token::Colon)?;
         }
         
-        let type_info = self.parse_type_info()?;
+        let type_info = if matches!(self.peek_token(), Some(Token::As | Token::WithDiminishing | Token::NoGuaranteedTermination)) {
+            TypeInfo {
+                onu_type: OnuType::Nothing,
+                display_name: "nothing".to_string(),
+                article: Token::Nothing,
+                via_role: None,
+            }
+        } else {
+             self.parse_type_info()?
+        };
         let returning = ReturnType(type_info.onu_type);
 
         let mut diminishing = None;
@@ -848,7 +869,7 @@ impl<'a, 'b> Parser<'a, 'b> {
             self.consume(Token::Of)?;
         }
 
-        let onu_type = match type_name.as_str() {
+        let mut onu_type = match type_name.as_str() {
             "tuple" => {
                 self.consume(Token::LParen)?;
                 let mut types = Vec::new();
@@ -874,11 +895,21 @@ impl<'a, 'b> Parser<'a, 'b> {
             _ => OnuType::from_name(&type_name).unwrap_or(OnuType::Shape(type_name.clone())),
         };
 
+        let mut via_role = None;
+        if let Some(Token::Via) = self.peek_token() {
+            self.consume(Token::Via)?;
+            self.consume(Token::The)?;
+            self.consume(Token::Role)?;
+            let role_name = self.consume_identifier(false)?;
+            via_role = Some(role_name.clone());
+            onu_type = OnuType::Shape(role_name);
+        }
+
         Ok(TypeInfo {
             onu_type,
             display_name: type_name,
             article,
-            via_role: None,
+            via_role,
         })
     }
 
@@ -940,6 +971,7 @@ impl<'a, 'b> Parser<'a, 'b> {
                     Token::Takes => "takes".to_string(),
                     Token::Delivers => "delivers".to_string(),
                     Token::Utilizes => "utilizes".to_string(),
+                    Token::Receiving => "receiving".to_string(),
                     Token::ActsAs => "acts-as".to_string(),
                     Token::Matches => "matches".to_string(),
                     Token::Exceeds => "exceeds".to_string(),
